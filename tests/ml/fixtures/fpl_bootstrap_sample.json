@@ -1,0 +1,40 @@
+{
+  "teams": [
+    {"id": 1, "name": "Arsenal"},
+    {"id": 2, "name": "Man City"}
+  ],
+  "elements": [
+    {
+      "id": 101,
+      "first_name": "Sample",
+      "second_name": "Forward",
+      "team": 1,
+      "element_type": 4,
+      "minutes": 2450,
+      "starts": 27,
+      "goals_scored": 18,
+      "assists": 7,
+      "expected_goals": "15.4",
+      "expected_assists": "5.9",
+      "tackles": 12,
+      "saves": 0,
+      "goals_conceded": 0
+    },
+    {
+      "id": 102,
+      "first_name": "Sample",
+      "second_name": "Keeper",
+      "team": 2,
+      "element_type": 1,
+      "minutes": 3060,
+      "starts": 34,
+      "goals_scored": 0,
+      "assists": 0,
+      "expected_goals": "0.0",
+      "expected_assists": "0.0",
+      "tackles": 0,
+      "saves": 98,
+      "goals_conceded": 31
+    }
+  ]
+}

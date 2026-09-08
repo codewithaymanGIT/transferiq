@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+.venv/
+venv/
+
+# Node / Next.js
+node_modules/
+.next/
+frontend/tsconfig.tsbuildinfo
+frontend/next-env.d.ts
+
+# Environment / secrets
+.env
+*.env.local
+
+# Data pulls -- large, regeneratable via scripts/ingest, don't belong in git history
+data/raw/
+data/processed/
+
+# soccerdata's own cache (lives outside the repo on your machine, but just in case)
+soccerdata/
+
+# ML model artifacts (regeneratable via scripts/train, can be large)
+models/*.joblib
+models/*.pkl
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
