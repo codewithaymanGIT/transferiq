@@ -20,6 +20,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts" / "train"))
 
 from train_baseline_models import (  # noqa: E402
     MIN_ROWS_FOR_TEST_SPLIT,
+    ModelResult,
     build_feature_matrix,
     run_comparison,
     usable_numeric_features,
@@ -117,3 +118,26 @@ def test_report_contains_real_numbers_not_placeholders(tmp_path):
     for r in results:
         assert f"{r.mae:.2f}" in content
         assert f"{r.r2:.3f}" in content
+
+
+def test_report_flags_negative_result_when_no_model_beats_baseline(tmp_path):
+    results = [
+        ModelResult(name="Median baseline", mae=10.0, rmse=15.0, median_ae=8.0, r2=-0.05, n_train=100, n_test=25),
+        ModelResult(name="Linear Regression", mae=12.0, rmse=17.0, median_ae=11.0, r2=-0.30, n_train=100, n_test=25),
+        ModelResult(name="Ridge", mae=12.5, rmse=17.5, median_ae=11.5, r2=-0.35, n_train=100, n_test=25),
+    ]
+    out_path = write_comparison_report(results, 500, ["minutes", "goals"], out_path=tmp_path / "report.md")
+    content = out_path.read_text()
+    assert "Negative result" in content
+    # n=500 is above the proof-of-concept threshold, isolating this as the negative-result trigger, not the row-count one
+    assert "Proof-of-concept only" not in content
+
+
+def test_report_omits_negative_result_when_a_model_beats_baseline(tmp_path):
+    results = [
+        ModelResult(name="Median baseline", mae=10.0, rmse=15.0, median_ae=8.0, r2=-0.05, n_train=100, n_test=25),
+        ModelResult(name="Linear Regression", mae=7.0, rmse=9.0, median_ae=6.5, r2=0.17, n_train=100, n_test=25),
+    ]
+    out_path = write_comparison_report(results, 500, ["minutes", "goals"], out_path=tmp_path / "report.md")
+    content = out_path.read_text()
+    assert "Negative result" not in content

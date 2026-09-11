@@ -163,6 +163,12 @@ def write_comparison_report(
         "actual sklearn/xgboost fit on real data, never hand-typed.",
         "",
     ]
+    baseline_r2 = next((r.r2 for r in results if r.name == "Median baseline"), None)
+    non_baseline = [r for r in results if r.name != "Median baseline"]
+    no_model_beats_baseline = (
+        baseline_r2 is not None and bool(non_baseline) and all(r.r2 <= baseline_r2 for r in non_baseline)
+    )
+
     if n_total_rows < PROOF_OF_CONCEPT_ROW_THRESHOLD:
         lines += [
             "> **Proof-of-concept only.** This run used "
@@ -170,6 +176,14 @@ def write_comparison_report(
             "comparison. Treat every metric here as illustrating that the pipeline works, "
             "not as a real signal of model quality. Re-run after loading more historical "
             "seasons (see README).",
+            "",
+        ]
+    if no_model_beats_baseline:
+        lines += [
+            "> **Negative result.** No model here beat a naive median-fee guess "
+            "(every model's R2 is at or below the median baseline's R2). This is an "
+            "honest finding, not a working valuation model -- treat it as evidence the "
+            "current features/data aren't sufficient yet, not as real predictions.",
             "",
         ]
     lines += [
