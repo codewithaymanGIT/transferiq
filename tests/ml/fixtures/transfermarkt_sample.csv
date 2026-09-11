@@ -1,0 +1,6 @@
+club_name,player_name,age,position,club_involved_name,fee,transfer_movement,transfer_period,fee_cleaned,league_name,year,season,country
+Manchester United,Cristiano Ronaldo,18,Centre-Forward,Sporting CP,€19.00m,in,Summer,19,Premier League,2003,2003/2004,England
+Manchester United,Cristiano Ronaldo,24,Centre-Forward,Real Madrid,€94.00m,out,Summer,94,Premier League,2009,2009/2010,England
+Liverpool FC,Philippe Coutinho,20,Left Winger,Inter,€13.00m,in,Winter,13,Premier League,2012,2012/2013,England
+Middlesbrough FC,Chris Morris,28,Right-Back,Celtic,?,in,Summer,NA,Premier League,1992,1992/1993,England
+Middlesbrough FC,Ben Roberts,17,Goalkeeper,Boro U18,-,in,Summer,NA,Premier League,1992,1992/1993,England

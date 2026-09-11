@@ -17,6 +17,7 @@ from sqlalchemy import (
     CheckConstraint,
     Date,
     DateTime,
+    Enum,
     ForeignKey,
     Numeric,
     SmallInteger,
@@ -55,6 +56,22 @@ class FeeCurrency(str, enum.Enum):
     EUR = "EUR"
     GBP = "GBP"
     USD = "USD"
+
+
+# Every native Postgres ENUM type below MUST be named to exactly match the
+# `CREATE TYPE ... AS ENUM` names in database/schema.sql. Without an
+# explicit `name=`, SQLAlchemy derives one from the Python class name
+# (e.g. FeeCurrency -> "feecurrency") which does NOT match schema.sql's
+# "fee_currency" -- single-row inserts can silently dodge this mismatch
+# (Postgres infers the type from the target column with no cast needed),
+# but SQLAlchemy's bulk/"insertmany" fast path adds an explicit `::name`
+# cast and fails with "type ... does not exist" the moment more than one
+# row of that type is flushed together. Pin every one explicitly so this
+# can't resurface for a column that happens to load one-row-at-a-time today.
+POSITION_GROUP_ENUM = Enum(PositionGroup, name="position_group")
+PREFERRED_FOOT_ENUM = Enum(PreferredFoot, name="preferred_foot")
+TRANSFER_TYPE_ENUM = Enum(TransferType, name="transfer_type")
+FEE_CURRENCY_ENUM = Enum(FeeCurrency, name="fee_currency")
 
 
 class Competition(Base):
@@ -114,8 +131,8 @@ class Player(Base):
     name: Mapped[str] = mapped_column(String, nullable=False, index=True)
     date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
     nationality: Mapped[str | None] = mapped_column(String, nullable=True)
-    position: Mapped[PositionGroup] = mapped_column(nullable=False, index=True)
-    foot: Mapped[PreferredFoot | None] = mapped_column(nullable=True)
+    position: Mapped[PositionGroup] = mapped_column(POSITION_GROUP_ENUM, nullable=False, index=True)
+    foot: Mapped[PreferredFoot | None] = mapped_column(PREFERRED_FOOT_ENUM, nullable=True)
     height_cm: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     current_club_id: Mapped[int | None] = mapped_column(ForeignKey("clubs.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -176,9 +193,9 @@ class Transfer(Base):
     to_club_id: Mapped[int | None] = mapped_column(ForeignKey("clubs.id"))
     transfer_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     fee_amount: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
-    fee_currency: Mapped[FeeCurrency | None]
+    fee_currency: Mapped[FeeCurrency | None] = mapped_column(FEE_CURRENCY_ENUM)
     fee_disclosed: Mapped[bool] = mapped_column(default=True, nullable=False)
-    transfer_type: Mapped[TransferType] = mapped_column(nullable=False)
+    transfer_type: Mapped[TransferType] = mapped_column(TRANSFER_TYPE_ENUM, nullable=False)
     season_id: Mapped[int | None] = mapped_column(ForeignKey("seasons.id"))
     source_id: Mapped[int | None] = mapped_column(ForeignKey("data_sources.id"))
     ingested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -196,7 +213,7 @@ class MarketValue(Base):
     player_id: Mapped[int] = mapped_column(ForeignKey("players.id", ondelete="CASCADE"), nullable=False, index=True)
     valuation_date: Mapped[date] = mapped_column(Date, nullable=False)
     value_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-    currency: Mapped[FeeCurrency] = mapped_column(default=FeeCurrency.EUR, nullable=False)
+    currency: Mapped[FeeCurrency] = mapped_column(FEE_CURRENCY_ENUM, default=FeeCurrency.EUR, nullable=False)
     source_id: Mapped[int | None] = mapped_column(ForeignKey("data_sources.id"))
     ingested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
