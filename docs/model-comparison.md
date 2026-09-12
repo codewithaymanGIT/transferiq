@@ -1,6 +1,6 @@
 # Model comparison
 
-Generated 2026-09-12T12:21:05+00:00 by `scripts/train/train_baseline_models.py` -- every number below comes from an actual sklearn/xgboost fit on real data, never hand-typed.
+Generated 2026-09-12T12:28:58+00:00 by `scripts/train/train_baseline_models.py` -- every number below comes from an actual sklearn/xgboost fit on real data, never hand-typed.
 
 Features used: minutes, goals, assists, goals_per90, assists_per90, age_at_transfer, position (one-hot).
 
@@ -23,3 +23,20 @@ Averaged over multiple folds rather than one fixed 80/20 split -- at this sample
 | Ridge | 13.23 | 19.73 | -0.034 | 0.548 |
 | Random Forest | 12.89 | 19.15 | 0.063 | 0.267 |
 | XGBoost | 14.23 | 20.25 | -0.090 | 0.447 |
+
+## Random Forest feature importances
+
+Fit on the full dataset (not a held-out split) purely to see which features this particular model leans on most -- descriptive, not a validated or causal claim, and not the same as the metrics above. SHAP explanations (planned) will give a more rigorous per-prediction breakdown later.
+
+| Feature | Importance |
+|---|---|
+| age_at_transfer | 0.430 |
+| minutes | 0.185 |
+| assists_per90 | 0.123 |
+| goals_per90 | 0.099 |
+| assists | 0.067 |
+| goals | 0.067 |
+| position=MF | 0.016 |
+| position=DF | 0.008 |
+| position=FW | 0.005 |
+| position=GK | 0.002 |

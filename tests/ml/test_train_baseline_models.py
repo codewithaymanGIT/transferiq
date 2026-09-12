@@ -23,6 +23,7 @@ from train_baseline_models import (  # noqa: E402
     CVModelResult,
     ModelResult,
     build_feature_matrix,
+    compute_feature_importances,
     run_comparison,
     run_cv_comparison,
     usable_numeric_features,
@@ -207,3 +208,38 @@ def test_negative_result_caveat_uses_cv_results_when_available(tmp_path):
     )
     content = out_path.read_text()
     assert "Negative result" not in content
+
+
+def test_compute_feature_importances_returns_all_features_sorted_descending():
+    df = _synthetic_matrix(n=70)
+    importances = compute_feature_importances(df)
+    names = {name for name, _ in importances}
+    # Every usable numeric feature plus one entry per one-hot position category.
+    assert "minutes" in names
+    assert "goals" in names
+    assert any(name.startswith("position=") for name in names)
+    values = [imp for _, imp in importances]
+    assert values == sorted(values, reverse=True)
+    # Importances are proportions of total split-quality gain -- must sum to ~1.
+    assert abs(sum(values) - 1.0) < 1e-6
+
+
+def test_compute_feature_importances_uses_clean_names_not_sklearn_internals():
+    df = _synthetic_matrix(n=70)
+    importances = compute_feature_importances(df)
+    for name, _ in importances:
+        assert "remainder__" not in name
+        assert "position_ohe__" not in name
+
+
+def test_report_includes_feature_importances_when_provided(tmp_path):
+    df = _synthetic_matrix(n=70)
+    results = run_comparison(df)
+    importances = compute_feature_importances(df)
+    out_path = write_comparison_report(
+        results, len(df), usable_numeric_features(df), out_path=tmp_path / "report.md", feature_importances=importances
+    )
+    content = out_path.read_text()
+    assert "Random Forest feature importances" in content
+    top_feature_name = importances[0][0]
+    assert top_feature_name in content

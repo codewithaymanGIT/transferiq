@@ -250,12 +250,52 @@ def run_cv_comparison(df: pd.DataFrame, n_splits: int = 5, random_state: int = 4
     return results
 
 
+def compute_feature_importances(df: pd.DataFrame, random_state: int = 42) -> list[tuple[str, float]]:
+    """Random Forest feature importances fit on the FULL dataset (no
+    train/test split -- this is about understanding which features the
+    model leans on, not evaluating held-out accuracy, so using all
+    available rows gives the most stable estimate at this sample size).
+    Purely descriptive of what this particular model does, not a validated
+    or causal claim -- SHAP (planned per the blueprint) will give a more
+    rigorous, per-prediction explanation later. Returns (feature_name,
+    importance) sorted descending."""
+    feature_df, numeric_cols = build_feature_matrix(df)
+    y_log = df["log_fee"].reset_index(drop=True)
+    feature_df = feature_df.reset_index(drop=True)
+    X = feature_df[numeric_cols + ["position"]]
+
+    preprocess = ColumnTransformer(
+        [("position_ohe", OneHotEncoder(handle_unknown="ignore"), ["position"])],
+        remainder="passthrough",
+    )
+    pipeline = Pipeline(
+        [("prep", preprocess), ("model", RandomForestRegressor(n_estimators=200, random_state=random_state))]
+    )
+    pipeline.fit(X, y_log)
+
+    def _clean_name(name: str) -> str:
+        # sklearn's ColumnTransformer prefixes names with the transformer id
+        # (e.g. "remainder__age_at_transfer", "position_ohe__position_MF") --
+        # strip that internal plumbing for a report a person will actually read.
+        name = str(name).replace("remainder__", "")
+        prefix = "position_ohe__position_"
+        if name.startswith(prefix):
+            return "position=" + name[len(prefix):]
+        return name
+
+    feature_names = pipeline.named_steps["prep"].get_feature_names_out()
+    importances = pipeline.named_steps["model"].feature_importances_
+    pairs = sorted(zip(feature_names, importances), key=lambda p: p[1], reverse=True)
+    return [(_clean_name(name), float(imp)) for name, imp in pairs]
+
+
 def write_comparison_report(
     results: list[ModelResult],
     n_total_rows: int,
     numeric_features: list[str],
     out_path: Path | None = None,
     cv_results: list["CVModelResult"] | None = None,
+    feature_importances: list[tuple[str, float]] | None = None,
 ) -> Path:
     lines = [
         "# Model comparison",
@@ -328,6 +368,23 @@ def write_comparison_report(
             )
         lines.append("")
 
+    if feature_importances:
+        lines += [
+            "## Random Forest feature importances",
+            "",
+            "Fit on the full dataset (not a held-out split) purely to see which "
+            "features this particular model leans on most -- descriptive, not a "
+            "validated or causal claim, and not the same as the metrics above. "
+            "SHAP explanations (planned) will give a more rigorous per-prediction "
+            "breakdown later.",
+            "",
+            "| Feature | Importance |",
+            "|---|---|",
+        ]
+        for name, imp in feature_importances:
+            lines.append(f"| {name} | {imp:.3f} |")
+        lines.append("")
+
     out_path = out_path or (REPO_ROOT / "docs" / "model-comparison.md")
     out_path.write_text("\n".join(lines), encoding="utf-8")
     return out_path
@@ -365,7 +422,15 @@ def main() -> None:
     for r in cv_results:
         logging.info("%-20s %14.2f %14.2f %10.3f", r.name, r.mae_mean, r.rmse_mean, r.r2_mean)
 
-    out_path = write_comparison_report(results, len(df), numeric_cols, cv_results=cv_results)
+    feature_importances = compute_feature_importances(df)
+    logging.info("")
+    logging.info("Random Forest feature importances (fit on full data):")
+    for name, imp in feature_importances:
+        logging.info("  %-30s %.3f", name, imp)
+
+    out_path = write_comparison_report(
+        results, len(df), numeric_cols, cv_results=cv_results, feature_importances=feature_importances
+    )
     logging.info("")
     logging.info("Wrote %s", out_path)
 
