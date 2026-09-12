@@ -59,6 +59,34 @@ export default async function PlayerProfilePage({ params }: { params: { id: stri
           </p>
         )}
       </section>
+
+      {valuation && Object.keys(valuation.shap_contributions).length > 0 && (
+        <section className="border border-border px-6 py-6">
+          <h2 className="font-display text-lg">Why this valuation</h2>
+          <p className="mt-1 text-sm text-muted">
+            Approximate contribution of each feature to the prediction above, from a
+            real SHAP explainer on the trained model -- a first-order approximation,
+            not an exact decomposition.
+          </p>
+          <div className="mt-4 space-y-2">
+            {Object.entries(valuation.shap_contributions)
+              .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
+              .slice(0, 8)
+              .map(([feature, value]) => (
+                <div
+                  key={feature}
+                  className="flex items-center justify-between border-b border-border py-1.5 last:border-b-0"
+                >
+                  <span className="text-sm text-muted">{feature}</span>
+                  <span className={`font-mono text-sm ${value >= 0 ? "text-accent" : "text-muted"}`}>
+                    {value >= 0 ? "+" : ""}
+                    £{value.toFixed(1)}m
+                  </span>
+                </div>
+              ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
