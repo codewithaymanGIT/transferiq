@@ -84,12 +84,22 @@ def assemble_training_matrix(db: Session) -> MatrixResult:
             skipped.append(f"{player.name}: no {prior_label} stats loaded (transfer in {season.label})")
             continue
 
+        age_at_transfer = None
+        if player.date_of_birth is not None and transfer.transfer_date is not None:
+            # Real age in years at the (approximate) transfer date, computed from
+            # a real birth year sourced from FBref (see fbref_provider.py) -- not
+            # backfilled or guessed when missing, per the project's anti-
+            # fabrication rule. Age is a well-documented major driver of transfer
+            # valuations that goals/assists/minutes alone don't capture.
+            age_at_transfer = (transfer.transfer_date - player.date_of_birth).days / 365.25
+
         rows.append(
             {
                 "player_name": player.name,
                 "position": player.position.value,
                 "transfer_season": season.label,
                 "stats_season": prior_label,
+                "age_at_transfer": age_at_transfer,
                 "minutes": stats.minutes,
                 "goals": stats.goals,
                 "assists": stats.assists,

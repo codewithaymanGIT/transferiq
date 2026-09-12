@@ -20,9 +20,11 @@ sys.path.insert(0, str(REPO_ROOT / "scripts" / "train"))
 
 from train_baseline_models import (  # noqa: E402
     MIN_ROWS_FOR_TEST_SPLIT,
+    CVModelResult,
     ModelResult,
     build_feature_matrix,
     run_comparison,
+    run_cv_comparison,
     usable_numeric_features,
     write_comparison_report,
 )
@@ -139,5 +141,69 @@ def test_report_omits_negative_result_when_a_model_beats_baseline(tmp_path):
         ModelResult(name="Linear Regression", mae=7.0, rmse=9.0, median_ae=6.5, r2=0.17, n_train=100, n_test=25),
     ]
     out_path = write_comparison_report(results, 500, ["minutes", "goals"], out_path=tmp_path / "report.md")
+    content = out_path.read_text()
+    assert "Negative result" not in content
+
+
+def test_run_cv_comparison_produces_five_real_models_with_fold_stats():
+    df = _synthetic_matrix(n=70)
+    results = run_cv_comparison(df, n_splits=5)
+    assert len(results) == 5
+    names = {r.name for r in results}
+    assert names == {"Median baseline", "Linear Regression", "Ridge", "Random Forest", "XGBoost"}
+    for r in results:
+        assert r.n_folds == 5
+        assert isinstance(r.r2_mean, float) and not pd.isna(r.r2_mean)
+        assert isinstance(r.r2_std, float) and r.r2_std >= 0
+        assert r.mae_mean >= 0
+        assert r.rmse_mean >= 0
+
+
+def test_run_cv_comparison_caps_folds_at_row_count():
+    df = _synthetic_matrix(n=3)
+    results = run_cv_comparison(df, n_splits=5)
+    # Can't have more folds than rows -- must degrade gracefully, not crash.
+    assert results[0].n_folds <= 3
+    assert results[0].n_folds >= 2
+
+
+def test_report_includes_cv_section_when_provided(tmp_path):
+    df = _synthetic_matrix(n=70)
+    results = run_comparison(df)
+    cv_results = run_cv_comparison(df)
+    out_path = write_comparison_report(
+        results, len(df), usable_numeric_features(df), out_path=tmp_path / "report.md", cv_results=cv_results
+    )
+    content = out_path.read_text()
+    assert "Cross-validated results" in content
+    for r in cv_results:
+        assert f"{r.r2_mean:.3f}" in content
+
+
+def test_report_omits_cv_section_when_not_provided(tmp_path):
+    df = _synthetic_matrix(n=70)
+    results = run_comparison(df)
+    out_path = write_comparison_report(
+        results, len(df), usable_numeric_features(df), out_path=tmp_path / "report.md"
+    )
+    content = out_path.read_text()
+    assert "Cross-validated results" not in content
+
+
+def test_negative_result_caveat_uses_cv_results_when_available(tmp_path):
+    # Single-split results all look bad, but CV shows one model genuinely
+    # beating baseline -- the caveat must trust the CV numbers, not the
+    # single split, since that's the whole point of adding CV.
+    results = [
+        ModelResult(name="Median baseline", mae=10.0, rmse=15.0, median_ae=8.0, r2=-0.05, n_train=100, n_test=25),
+        ModelResult(name="Random Forest", mae=12.0, rmse=17.0, median_ae=11.0, r2=-0.50, n_train=100, n_test=25),
+    ]
+    cv_results = [
+        CVModelResult(name="Median baseline", r2_mean=-0.08, r2_std=0.09, mae_mean=10.0, mae_std=1.0, rmse_mean=15.0, rmse_std=1.0, n_folds=5),
+        CVModelResult(name="Random Forest", r2_mean=0.06, r2_std=0.27, mae_mean=9.0, mae_std=1.0, rmse_mean=14.0, rmse_std=1.0, n_folds=5),
+    ]
+    out_path = write_comparison_report(
+        results, 500, ["minutes", "goals"], out_path=tmp_path / "report.md", cv_results=cv_results
+    )
     content = out_path.read_text()
     assert "Negative result" not in content

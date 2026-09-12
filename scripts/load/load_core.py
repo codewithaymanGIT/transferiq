@@ -90,15 +90,36 @@ def get_or_create_data_source(db: Session, name: str, url: str) -> models.DataSo
     return source
 
 
-def _upsert_player(db: Session, name: str, position: str, club_id: int) -> tuple[models.Player, bool]:
+def _birth_year_to_date(birth_year) -> "date | None":
+    """FBref's 'born' column gives only a birth YEAR, not an exact date.
+    Approximate with Jan 1 of that year -- documented as approximate, same
+    pattern as _approximate_transfer_date below. Good enough for computing
+    age-at-transfer to the nearest year, not for exact-birthday precision."""
+    if birth_year is None or pd.isna(birth_year):
+        return None
+    return date(int(birth_year), 1, 1)
+
+
+def _upsert_player(
+    db: Session,
+    name: str,
+    position: str,
+    club_id: int,
+    birth_year=None,
+    nationality: str | None = None,
+) -> tuple[models.Player, bool]:
     """Returns (player, was_created)."""
     player = db.query(models.Player).filter_by(name=name).first()
     was_created = player is None
+    dob = _birth_year_to_date(birth_year)
+    clean_nationality = nationality if (nationality is not None and pd.notna(nationality)) else None
     if player is None:
         player = models.Player(
             name=name,
             position=models.PositionGroup(position),
             current_club_id=club_id,
+            date_of_birth=dob,
+            nationality=clean_nationality,
         )
         db.add(player)
         db.flush()
@@ -106,6 +127,13 @@ def _upsert_player(db: Session, name: str, position: str, club_id: int) -> tuple
         # Players move clubs season to season -- keep this current with the latest pull.
         player.current_club_id = club_id
         player.position = models.PositionGroup(position)
+        # Birth year/nationality are static real-world facts -- only fill if
+        # we don't already have them; never overwrite a previously-set real
+        # value with a possibly-missing one from an older/different pull.
+        if player.date_of_birth is None and dob is not None:
+            player.date_of_birth = dob
+        if player.nationality is None and clean_nationality is not None:
+            player.nationality = clean_nationality
     return player, was_created
 
 
@@ -248,7 +276,14 @@ def load_dataframe(
             continue
 
         club = get_or_create_club(db, row["club"], comp.id)
-        player, created = _upsert_player(db, row["player_name"], position, club.id)
+        player, created = _upsert_player(
+            db,
+            row["player_name"],
+            position,
+            club.id,
+            birth_year=row.get("birth_year"),
+            nationality=row.get("nationality"),
+        )
         result.players_created += int(created)
         result.players_updated += int(not created)
 

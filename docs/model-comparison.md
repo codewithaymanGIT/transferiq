@@ -1,15 +1,25 @@
 # Model comparison
 
-Generated 2026-09-11T21:21:57+00:00 by `scripts/train/train_baseline_models.py` -- every number below comes from an actual sklearn/xgboost fit on real data, never hand-typed.
+Generated 2026-09-12T12:21:05+00:00 by `scripts/train/train_baseline_models.py` -- every number below comes from an actual sklearn/xgboost fit on real data, never hand-typed.
 
-> **Negative result.** No model here beat a naive median-fee guess (every model's R2 is at or below the median baseline's R2). This is an honest finding, not a working valuation model -- treat it as evidence the current features/data aren't sufficient yet, not as real predictions.
-
-Features used: minutes, goals, assists, goals_per90, assists_per90, position (one-hot).
+Features used: minutes, goals, assists, goals_per90, assists_per90, age_at_transfer, position (one-hot).
 
 | Model | MAE (EUR m) | RMSE (EUR m) | Median AE (EUR m) | R² | n_train | n_test |
 |---|---|---|---|---|---|---|
 | Median baseline | 11.27 | 16.99 | 7.70 | -0.044 | 102 | 26 |
-| Linear Regression | 14.31 | 19.67 | 13.41 | -0.398 | 102 | 26 |
-| Ridge | 14.37 | 19.82 | 13.37 | -0.420 | 102 | 26 |
-| Random Forest | 14.02 | 19.22 | 12.79 | -0.335 | 102 | 26 |
-| XGBoost | 15.58 | 21.32 | 10.97 | -0.643 | 102 | 26 |
+| Linear Regression | 19.06 | 25.96 | 12.96 | -1.436 | 102 | 26 |
+| Ridge | 17.49 | 23.89 | 13.53 | -1.062 | 102 | 26 |
+| Random Forest | 15.75 | 20.76 | 12.93 | -0.558 | 102 | 26 |
+| XGBoost | 17.84 | 23.13 | 14.50 | -0.934 | 102 | 26 |
+
+## Cross-validated results (5-fold)
+
+Averaged over multiple folds rather than one fixed 80/20 split -- at this sample size a single split's R2 is unstable enough (observed swings of more than a full point from adding a single feature) that it should not be trusted alone. This is a steadier, though still rough, read on whether a feature genuinely helps.
+
+| Model | Mean MAE (EUR m) | Mean RMSE (EUR m) | Mean R2 | R2 std dev |
+|---|---|---|---|---|
+| Median baseline | 14.78 | 20.98 | -0.084 | 0.086 |
+| Linear Regression | 13.57 | 19.90 | -0.091 | 0.703 |
+| Ridge | 13.23 | 19.73 | -0.034 | 0.548 |
+| Random Forest | 12.89 | 19.15 | 0.063 | 0.267 |
+| XGBoost | 14.23 | 20.25 | -0.090 | 0.447 |

@@ -29,10 +29,11 @@ from sklearn.dummy import DummyRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LinearRegression, Ridge
 from sklearn.metrics import mean_absolute_error, median_absolute_error, r2_score, root_mean_squared_error
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, KFold
 from sklearn.preprocessing import OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
+from sklearn.base import clone
 from xgboost import XGBRegressor
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -40,7 +41,26 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 _CANDIDATE_NUMERIC_FEATURES = [
     "minutes", "goals", "assists", "xg", "xa",
     "goals_per90", "assists_per90", "xg_per90", "xa_per90",
+    "age_at_transfer",
 ]
+# transfer_year tested and dropped: two runs (alone, and combined with
+# age_at_transfer) both made every model worse, not better -- likely
+# overfitting on ~100 training rows rather than a real era signal. Kept
+# out of the default candidate set; still computed and available in the
+# training matrix (see build_training_matrix.py) if revisited later with
+# more data.
+
+
+def add_transfer_year_column(df: pd.DataFrame) -> pd.DataFrame:
+    """Derive a numeric transfer_year (e.g. 2020 from '2020-2021') from the
+    real transfer_season string written by build_training_matrix.py. This
+    lets a model learn era-based market effects (inflation, spending
+    trends) directly from real data, instead of us hand-picking an
+    external inflation index we cannot fully verify."""
+    df = df.copy()
+    if "transfer_season" in df.columns:
+        df["transfer_year"] = df["transfer_season"].str.split("-").str[0].astype("Int64").astype("float")
+    return df
 
 MIN_ROWS_FOR_TEST_SPLIT = 20
 PROOF_OF_CONCEPT_ROW_THRESHOLD = 100  # below this, treat any comparison as illustrative only
@@ -152,8 +172,90 @@ def run_comparison(df: pd.DataFrame) -> list[ModelResult]:
     return results
 
 
+@dataclass
+class CVModelResult:
+    name: str
+    r2_mean: float
+    r2_std: float
+    mae_mean: float
+    mae_std: float
+    rmse_mean: float
+    rmse_std: float
+    n_folds: int
+
+
+def run_cv_comparison(df: pd.DataFrame, n_splits: int = 5, random_state: int = 42) -> list[CVModelResult]:
+    """K-fold cross-validated comparison -- more reliable than a single
+    train/test split at small sample sizes. A single 80/20 split's R2 can
+    swing wildly (observed firsthand: adding/removing one feature moved R2
+    by more than a full point on the same 128-row dataset) simply because
+    which ~25 rows land in the held-out set matters a lot when there are so
+    few of them. Averaging over multiple folds gives a steadier, more
+    trustworthy read on whether a feature actually helps, though with this
+    little data it is still a rough signal, not a precise one."""
+    feature_df, numeric_cols = build_feature_matrix(df)
+    y_log = df["log_fee"].reset_index(drop=True)
+    feature_df = feature_df.reset_index(drop=True)
+    X = feature_df[numeric_cols + ["position"]]
+
+    n = len(df)
+    effective_splits = max(2, min(n_splits, n))
+    kf = KFold(n_splits=effective_splits, shuffle=True, random_state=random_state)
+
+    preprocess = ColumnTransformer(
+        [("position_ohe", OneHotEncoder(handle_unknown="ignore"), ["position"])],
+        remainder="passthrough",
+    )
+
+    model_specs = [
+        ("Median baseline", DummyRegressor(strategy="median")),
+        ("Linear Regression", Pipeline([("prep", preprocess), ("model", LinearRegression())])),
+        ("Ridge", Pipeline([("prep", preprocess), ("model", Ridge(alpha=1.0))])),
+        (
+            "Random Forest",
+            Pipeline([("prep", preprocess), ("model", RandomForestRegressor(n_estimators=200, random_state=random_state))]),
+        ),
+        (
+            "XGBoost",
+            Pipeline([("prep", preprocess), ("model", XGBRegressor(n_estimators=200, random_state=random_state, verbosity=0))]),
+        ),
+    ]
+
+    results = []
+    for name, model in model_specs:
+        fold_r2, fold_mae, fold_rmse = [], [], []
+        for train_idx, test_idx in kf.split(X):
+            X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
+            y_train_log, y_test_log = y_log.iloc[train_idx], y_log.iloc[test_idx]
+            model_clone = clone(model)
+            model_clone.fit(X_train, y_train_log)
+            pred_log = model_clone.predict(X_test)
+            y_test = np.expm1(y_test_log)
+            pred = np.expm1(pred_log)
+            fold_r2.append(r2_score(y_test, pred))
+            fold_mae.append(mean_absolute_error(y_test, pred))
+            fold_rmse.append(root_mean_squared_error(y_test, pred))
+        results.append(
+            CVModelResult(
+                name=name,
+                r2_mean=float(np.mean(fold_r2)),
+                r2_std=float(np.std(fold_r2)),
+                mae_mean=float(np.mean(fold_mae)),
+                mae_std=float(np.std(fold_mae)),
+                rmse_mean=float(np.mean(fold_rmse)),
+                rmse_std=float(np.std(fold_rmse)),
+                n_folds=effective_splits,
+            )
+        )
+    return results
+
+
 def write_comparison_report(
-    results: list[ModelResult], n_total_rows: int, numeric_features: list[str], out_path: Path | None = None
+    results: list[ModelResult],
+    n_total_rows: int,
+    numeric_features: list[str],
+    out_path: Path | None = None,
+    cv_results: list["CVModelResult"] | None = None,
 ) -> Path:
     lines = [
         "# Model comparison",
@@ -163,10 +265,19 @@ def write_comparison_report(
         "actual sklearn/xgboost fit on real data, never hand-typed.",
         "",
     ]
-    baseline_r2 = next((r.r2 for r in results if r.name == "Median baseline"), None)
-    non_baseline = [r for r in results if r.name != "Median baseline"]
+    # Prefer the cross-validated results for this check when available -- a
+    # single 80/20 split's R2 is too unstable at this sample size to safely
+    # call "negative" (we observed a model that failed on one split come out
+    # ahead of baseline once averaged over 5 folds). Fall back to the single
+    # split only if no CV results were computed.
+    if cv_results:
+        baseline_r2 = next((r.r2_mean for r in cv_results if r.name == "Median baseline"), None)
+        non_baseline_r2s = [r.r2_mean for r in cv_results if r.name != "Median baseline"]
+    else:
+        baseline_r2 = next((r.r2 for r in results if r.name == "Median baseline"), None)
+        non_baseline_r2s = [r.r2 for r in results if r.name != "Median baseline"]
     no_model_beats_baseline = (
-        baseline_r2 is not None and bool(non_baseline) and all(r.r2 <= baseline_r2 for r in non_baseline)
+        baseline_r2 is not None and bool(non_baseline_r2s) and all(r2 <= baseline_r2 for r2 in non_baseline_r2s)
     )
 
     if n_total_rows < PROOF_OF_CONCEPT_ROW_THRESHOLD:
@@ -198,6 +309,25 @@ def write_comparison_report(
         )
     lines.append("")
 
+    if cv_results:
+        lines += [
+            f"## Cross-validated results ({cv_results[0].n_folds}-fold)",
+            "",
+            "Averaged over multiple folds rather than one fixed 80/20 split -- at "
+            "this sample size a single split's R2 is unstable enough (observed "
+            "swings of more than a full point from adding a single feature) that "
+            "it should not be trusted alone. This is a steadier, though still "
+            "rough, read on whether a feature genuinely helps.",
+            "",
+            "| Model | Mean MAE (EUR m) | Mean RMSE (EUR m) | Mean R2 | R2 std dev |",
+            "|---|---|---|---|---|",
+        ]
+        for r in cv_results:
+            lines.append(
+                f"| {r.name} | {r.mae_mean:.2f} | {r.rmse_mean:.2f} | {r.r2_mean:.3f} | {r.r2_std:.3f} |"
+            )
+        lines.append("")
+
     out_path = out_path or (REPO_ROOT / "docs" / "model-comparison.md")
     out_path.write_text("\n".join(lines), encoding="utf-8")
     return out_path
@@ -213,6 +343,7 @@ def main() -> None:
 
     df = pd.read_parquet(matrix_path)
     logging.info("Loaded %d rows from %s", len(df), matrix_path)
+    df = add_transfer_year_column(df)
 
     numeric_cols = usable_numeric_features(df)
     logging.info("Usable numeric features (non-all-null): %s", numeric_cols)
@@ -227,7 +358,14 @@ def main() -> None:
     for r in results:
         logging.info("%-20s %10.2f %10.2f %10.2f %8.3f", r.name, r.mae, r.rmse, r.median_ae, r.r2)
 
-    out_path = write_comparison_report(results, len(df), numeric_cols)
+    cv_results = run_cv_comparison(df)
+    logging.info("")
+    logging.info("Cross-validated (%d-fold), more reliable at this sample size:", cv_results[0].n_folds)
+    logging.info("%-20s %14s %14s %10s", "Model", "Mean MAE", "Mean RMSE", "Mean R2")
+    for r in cv_results:
+        logging.info("%-20s %14.2f %14.2f %10.3f", r.name, r.mae_mean, r.rmse_mean, r.r2_mean)
+
+    out_path = write_comparison_report(results, len(df), numeric_cols, cv_results=cv_results)
     logging.info("")
     logging.info("Wrote %s", out_path)
 
