@@ -73,6 +73,13 @@ class FBrefProvider(FootballDataProvider):
                 "player_name": col("player"),
                 "club": col("team"),
                 "position": col("pos"),
+                "nationality": col("nation"),
+                # FBref's "age" column is text like "27-045" (years-days) as of the
+                # scrape date, not the season; we keep raw age separately from the
+                # more reliable "born" (birth year, e.g. 1996), which is what
+                # age-at-transfer should actually be computed from downstream.
+                "age_raw": col("age"),
+                "birth_year": _numeric(col("born")),
                 "minutes": _numeric(col("Playing Time", "Min")),
                 "starts": _numeric(col("Playing Time", "Starts")),
                 "apps": _numeric(col("Playing Time", "MP")),
