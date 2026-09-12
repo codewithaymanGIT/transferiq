@@ -249,6 +249,8 @@ class Prediction(Base):
     high_bound: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     confidence: Mapped[str] = mapped_column(String, nullable=False)
     predicted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    shap_contributions: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    shap_contributions: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class User(Base):

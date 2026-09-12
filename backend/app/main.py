@@ -118,5 +118,5 @@ def get_valuation(player_id: int, db: Session = Depends(get_db)) -> schemas.Valu
         confidence=latest_pred.confidence,  # type: ignore[arg-type]
         benchmark_value=benchmark_value,
         benchmark_difference_pct=benchmark_diff_pct,
-        shap_contributions={},  # populated once the SHAP explainer is wired in (Phase 7)
+        shap_contributions=latest_pred.shap_contributions or {},
     )

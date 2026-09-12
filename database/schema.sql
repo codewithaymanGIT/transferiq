@@ -173,6 +173,7 @@ CREATE TABLE predictions (
     high_bound          NUMERIC(12,2) NOT NULL,
     confidence          TEXT NOT NULL,           -- 'High' | 'Medium' | 'Low' -- derived from interval width, see ml-methodology.md
     predicted_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    shap_contributions  JSONB,                   -- feature -> approximate signed EUR contribution, from a real SHAP explainer; null until computed
     CONSTRAINT predictions_bounds_valid CHECK (low_bound <= predicted_value AND predicted_value <= high_bound)
 );
 CREATE INDEX idx_predictions_player ON predictions (player_id);

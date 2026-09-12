@@ -26,7 +26,12 @@ sys.path.insert(0, str(REPO_ROOT / "scripts" / "train"))
 sys.path.insert(0, str(REPO_ROOT / "scripts" / "transform"))
 
 from app import models  # noqa: E402
-from generate_predictions import _build_live_features, _fit_final_model, _latest_season  # noqa: E402
+from generate_predictions import (  # noqa: E402
+    _build_live_features,
+    _fit_final_model,
+    _latest_season,
+    compute_shap_contributions_eur,
+)
 
 
 @pytest.fixture()
@@ -141,3 +146,39 @@ def test_build_live_features_returns_empty_for_no_stats(db_session):
     live_df, skipped = _build_live_features(db_session, season, reference_date=date(2026, 1, 1))
     assert live_df.empty
     assert skipped == 0
+
+
+def test_compute_shap_contributions_eur_returns_one_dict_per_row():
+    df = _synthetic_training_matrix(n=30)
+    pipeline = _fit_final_model(df)
+    model = pipeline.named_steps["model"]
+    prep = pipeline.named_steps["prep"]
+
+    X = df[["minutes", "goals", "assists", "goals_per90", "assists_per90", "age_at_transfer", "position"]]
+    X_transformed = prep.transform(X)
+    predicted_value = np.expm1(pipeline.predict(X))
+
+    contributions = compute_shap_contributions_eur(model, prep, X_transformed, predicted_value)
+    assert len(contributions) == len(df)
+    for row in contributions:
+        assert "age" in row  # cleaned from age_at_transfer via _FEATURE_DISPLAY_NAMES
+        assert any(k.startswith("position=") for k in row)
+        assert all(isinstance(v, float) for v in row.values())
+
+
+def test_compute_shap_contributions_eur_uses_clean_names_not_sklearn_internals():
+    df = _synthetic_training_matrix(n=30)
+    pipeline = _fit_final_model(df)
+    model = pipeline.named_steps["model"]
+    prep = pipeline.named_steps["prep"]
+
+    X = df[["minutes", "goals", "assists", "goals_per90", "assists_per90", "age_at_transfer", "position"]]
+    X_transformed = prep.transform(X)
+    predicted_value = np.expm1(pipeline.predict(X))
+
+    contributions = compute_shap_contributions_eur(model, prep, X_transformed, predicted_value)
+    for row in contributions:
+        for name in row:
+            assert "remainder__" not in name
+            assert "position_ohe__" not in name
+            assert "age_at_transfer" not in name  # renamed to "age"

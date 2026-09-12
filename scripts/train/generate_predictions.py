@@ -42,6 +42,40 @@ from app import models  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
 from per90 import add_per90_columns  # noqa: E402
 
+_FEATURE_DISPLAY_NAMES = {
+    "age_at_transfer": "age",
+}
+
+
+def _clean_shap_feature_name(name: str) -> str:
+    name = str(name).replace("remainder__", "")
+    prefix = "position_ohe__position_"
+    if name.startswith(prefix):
+        return "position=" + name[len(prefix):]
+    return _FEATURE_DISPLAY_NAMES.get(name, name)
+
+
+def compute_shap_contributions_eur(model, prep, X_transformed, predicted_value: np.ndarray) -> list[dict]:
+    """Real per-player SHAP values (log-fee space, since that's what the
+    model was trained on), converted to an approximate EUR-millions
+    contribution per feature via a first-order local approximation: EUR
+    sensitivity to a change in log-fee is roughly predicted_value itself
+    (d(expm1(x))/dx = exp(x) = predicted_value + 1 near the prediction
+    point). This is an approximation, not an exact decomposition --
+    documented as such rather than presented as more precise than it is.
+    Returns one dict per row in X_transformed, feature name -> contribution."""
+    import shap  # lazy import -- heavy dependency, only needed here
+
+    explainer = shap.TreeExplainer(model)
+    shap_values_log = explainer.shap_values(X_transformed)
+    feature_names = prep.get_feature_names_out()
+    clean_names = [_clean_shap_feature_name(n) for n in feature_names]
+    contributions_eur = shap_values_log * (np.asarray(predicted_value) + 1.0)[:, None]
+    return [
+        {name: round(float(val), 4) for name, val in zip(clean_names, row)}
+        for row in contributions_eur
+    ]
+
 logger = logging.getLogger(__name__)
 
 MODEL_NAME = "random_forest_v1"
@@ -150,6 +184,8 @@ def main() -> None:
         predicted_value = np.expm1(pred_log)
         low_bound = np.expm1(low_log)
         high_bound = np.expm1(high_log)
+
+        per_row_contributions = compute_shap_contributions_eur(model, prep, X_transformed, predicted_value)
         # The DB enforces low_bound <= predicted_value <= high_bound. A
         # small tree ensemble's percentile spread can occasionally invert
         # slightly around the mean -- clip rather than silently violate
@@ -175,9 +211,14 @@ def main() -> None:
         for mv in db.query(models.ModelVersion).filter_by(is_active=True).all():
             mv.is_active = False
 
+        trained_at = datetime.now(timezone.utc)
         model_version = models.ModelVersion(
-            name=f"{MODEL_NAME}_{reference_date.isoformat()}",
-            trained_at=datetime.now(timezone.utc),
+            # Full timestamp, not just the date -- re-running this script
+            # more than once on the same day previously collided on the
+            # unique name constraint; a real bug caught by actually running
+            # it twice, not a hypothetical.
+            name=f"{MODEL_NAME}_{trained_at.strftime('%Y-%m-%dT%H%M%S')}",
+            trained_at=trained_at,
             metrics_json=metrics_json,
             feature_list_json=_FEATURE_COLS + ["position"],
             hyperparams_json={
@@ -193,6 +234,7 @@ def main() -> None:
         live_df = live_df.reset_index(drop=True)
         written = 0
         for i, row in live_df.iterrows():
+            contributions = per_row_contributions[i]
             db.add(
                 models.Prediction(
                     player_id=int(row["player_id"]),
@@ -201,6 +243,7 @@ def main() -> None:
                     low_bound=round(float(low_bound[i]), 2),
                     high_bound=round(float(high_bound[i]), 2),
                     confidence="Low",
+                    shap_contributions=contributions,
                 )
             )
             written += 1
