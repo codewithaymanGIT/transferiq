@@ -1,6 +1,6 @@
 # Model comparison
 
-Generated 2026-09-12T12:28:58+00:00 by `scripts/train/train_baseline_models.py` -- every number below comes from an actual sklearn/xgboost fit on real data, never hand-typed.
+Generated 2026-09-12T12:35:22+00:00 by `scripts/train/train_baseline_models.py` -- every number below comes from an actual sklearn/xgboost fit on real data, never hand-typed.
 
 Features used: minutes, goals, assists, goals_per90, assists_per90, age_at_transfer, position (one-hot).
 
@@ -40,3 +40,20 @@ Fit on the full dataset (not a held-out split) purely to see which features this
 | position=DF | 0.008 |
 | position=FW | 0.005 |
 | position=GK | 0.002 |
+
+## SHAP feature importance (mean |SHAP value|)
+
+Real SHAP values from shap.TreeExplainer on the Random Forest model, fit on the full dataset. More rigorous than the Gini importances above since SHAP reflects each feature's actual average impact on individual predictions (in log-fee units), not just split frequency. Still descriptive of this one model, not a causal claim.
+
+| Feature | Mean |SHAP value| |
+|---|---|
+| age_at_transfer | 0.4394 |
+| minutes | 0.1894 |
+| assists_per90 | 0.0787 |
+| goals | 0.0733 |
+| goals_per90 | 0.0683 |
+| assists | 0.0645 |
+| position=MF | 0.0333 |
+| position=DF | 0.0072 |
+| position=FW | 0.0037 |
+| position=GK | 0.0016 |

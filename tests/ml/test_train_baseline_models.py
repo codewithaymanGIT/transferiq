@@ -24,6 +24,7 @@ from train_baseline_models import (  # noqa: E402
     ModelResult,
     build_feature_matrix,
     compute_feature_importances,
+    compute_shap_summary,
     run_comparison,
     run_cv_comparison,
     usable_numeric_features,
@@ -243,3 +244,46 @@ def test_report_includes_feature_importances_when_provided(tmp_path):
     assert "Random Forest feature importances" in content
     top_feature_name = importances[0][0]
     assert top_feature_name in content
+
+
+def test_compute_shap_summary_returns_all_features_nonnegative():
+    df = _synthetic_matrix(n=70)
+    shap_summary = compute_shap_summary(df)
+    names = {name for name, _ in shap_summary}
+    assert "minutes" in names
+    assert "age_at_transfer" not in names  # not a column in _synthetic_matrix -- shouldn't appear
+    # Mean absolute SHAP values are magnitudes -- never negative.
+    assert all(val >= 0 for _, val in shap_summary)
+    values = [val for _, val in shap_summary]
+    assert values == sorted(values, reverse=True)
+
+
+def test_compute_shap_summary_uses_clean_names():
+    df = _synthetic_matrix(n=70)
+    shap_summary = compute_shap_summary(df)
+    for name, _ in shap_summary:
+        assert "remainder__" not in name
+        assert "position_ohe__" not in name
+
+
+def test_report_includes_shap_section_when_provided(tmp_path):
+    df = _synthetic_matrix(n=70)
+    results = run_comparison(df)
+    shap_summary = compute_shap_summary(df)
+    out_path = write_comparison_report(
+        results, len(df), usable_numeric_features(df), out_path=tmp_path / "report.md", shap_summary=shap_summary
+    )
+    content = out_path.read_text()
+    assert "SHAP feature importance" in content
+    top_feature_name = shap_summary[0][0]
+    assert top_feature_name in content
+
+
+def test_report_omits_shap_section_when_not_provided(tmp_path):
+    df = _synthetic_matrix(n=70)
+    results = run_comparison(df)
+    out_path = write_comparison_report(
+        results, len(df), usable_numeric_features(df), out_path=tmp_path / "report.md"
+    )
+    content = out_path.read_text()
+    assert "SHAP feature importance" not in content

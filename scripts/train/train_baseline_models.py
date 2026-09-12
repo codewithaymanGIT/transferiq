@@ -289,6 +289,46 @@ def compute_feature_importances(df: pd.DataFrame, random_state: int = 42) -> lis
     return [(_clean_name(name), float(imp)) for name, imp in pairs]
 
 
+def compute_shap_summary(df: pd.DataFrame, random_state: int = 42) -> list[tuple[str, float]]:
+    """Real SHAP values for the Random Forest model, fit on the full
+    dataset for the same reason as compute_feature_importances: this is
+    about understanding what the model leans on, not evaluating held-out
+    accuracy. More rigorous than raw Gini/split importances since SHAP
+    accounts for how each feature actually moves individual predictions
+    (including interactions), not just how often it is used to split.
+    Returns (feature_name, mean absolute SHAP value) sorted descending."""
+    import shap  # lazy import -- heavy dependency, only needed here
+
+    feature_df, numeric_cols = build_feature_matrix(df)
+    y_log = df["log_fee"].reset_index(drop=True)
+    feature_df = feature_df.reset_index(drop=True)
+    X = feature_df[numeric_cols + ["position"]]
+
+    preprocess = ColumnTransformer(
+        [("position_ohe", OneHotEncoder(handle_unknown="ignore", sparse_output=False), ["position"])],
+        remainder="passthrough",
+    )
+    X_transformed = preprocess.fit_transform(X)
+    feature_names = preprocess.get_feature_names_out()
+
+    model = RandomForestRegressor(n_estimators=200, random_state=random_state)
+    model.fit(X_transformed, y_log)
+
+    explainer = shap.TreeExplainer(model)
+    shap_values = explainer.shap_values(X_transformed)
+    mean_abs_shap = np.abs(shap_values).mean(axis=0)
+
+    def _clean_name(name: str) -> str:
+        name = str(name).replace("remainder__", "")
+        prefix = "position_ohe__position_"
+        if name.startswith(prefix):
+            return "position=" + name[len(prefix):]
+        return name
+
+    pairs = sorted(zip(feature_names, mean_abs_shap), key=lambda p: p[1], reverse=True)
+    return [(_clean_name(name), float(val)) for name, val in pairs]
+
+
 def write_comparison_report(
     results: list[ModelResult],
     n_total_rows: int,
@@ -296,6 +336,7 @@ def write_comparison_report(
     out_path: Path | None = None,
     cv_results: list["CVModelResult"] | None = None,
     feature_importances: list[tuple[str, float]] | None = None,
+    shap_summary: list[tuple[str, float]] | None = None,
 ) -> Path:
     lines = [
         "# Model comparison",
@@ -385,6 +426,23 @@ def write_comparison_report(
             lines.append(f"| {name} | {imp:.3f} |")
         lines.append("")
 
+    if shap_summary:
+        lines += [
+            "## SHAP feature importance (mean |SHAP value|)",
+            "",
+            "Real SHAP values from shap.TreeExplainer on the Random Forest model, "
+            "fit on the full dataset. More rigorous than the Gini importances above "
+            "since SHAP reflects each feature's actual average impact on individual "
+            "predictions (in log-fee units), not just split frequency. Still "
+            "descriptive of this one model, not a causal claim.",
+            "",
+            "| Feature | Mean |SHAP value| |",
+            "|---|---|",
+        ]
+        for name, val in shap_summary:
+            lines.append(f"| {name} | {val:.4f} |")
+        lines.append("")
+
     out_path = out_path or (REPO_ROOT / "docs" / "model-comparison.md")
     out_path.write_text("\n".join(lines), encoding="utf-8")
     return out_path
@@ -428,8 +486,19 @@ def main() -> None:
     for name, imp in feature_importances:
         logging.info("  %-30s %.3f", name, imp)
 
+    shap_summary = compute_shap_summary(df)
+    logging.info("")
+    logging.info("SHAP feature importance (mean |SHAP value|, fit on full data):")
+    for name, val in shap_summary:
+        logging.info("  %-30s %.4f", name, val)
+
     out_path = write_comparison_report(
-        results, len(df), numeric_cols, cv_results=cv_results, feature_importances=feature_importances
+        results,
+        len(df),
+        numeric_cols,
+        cv_results=cv_results,
+        feature_importances=feature_importances,
+        shap_summary=shap_summary,
     )
     logging.info("")
     logging.info("Wrote %s", out_path)
