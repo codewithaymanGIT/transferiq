@@ -1,0 +1,32 @@
+Generic single-database configuration.
+
+---
+
+TransferIQ-specific notes
+==========================
+
+The schema is authored in database/schema.sql (loaded automatically by
+Postgres on first container start via docker-entrypoint-initdb.d) and
+mirrored in backend/app/models.py's SQLAlchemy ORM classes. Alembic was
+adopted after both already existed and matched (as of 2026-09-12), so the
+first migration (`baseline`) is a deliberate no-op -- it does not create
+any tables. A fresh database still needs schema.sql; Alembic is stamped
+onto it afterward with `alembic stamp head`, not run with `upgrade head`.
+
+Workflow for a real future schema change:
+    1. Edit backend/app/models.py (the two must never drift apart).
+    2. Also update database/schema.sql to match, by hand.
+    3. Run: alembic revision --autogenerate -m "short description"
+    4. READ the generated file before running anything. Autogenerate
+       compares the live DB against models.py's ORM classes only -- if a
+       table exists in schema.sql/the DB but has no ORM class (as was
+       true for player_comparisons, watchlist_players, and
+       player_comparison_players when Alembic was adopted), autogenerate
+       will propose DROPPING it. Never run a migration you have not read.
+    5. Run: alembic upgrade head
+
+Known gap (as of the baseline migration): player_comparisons,
+watchlist_players, and player_comparison_players exist in schema.sql and
+the live database but have no ORM class in models.py yet. These are the
+blueprint's optional, non-core auth/watchlist tables. Left as-is rather
+than guessing whether to add classes or drop the tables.
