@@ -55,9 +55,10 @@ async function apiFetch<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export function listPlayers(params: { position?: string; page?: number } = {}) {
+export function listPlayers(params: { position?: string; q?: string; page?: number } = {}) {
   const qs = new URLSearchParams();
   if (params.position) qs.set("position", params.position);
+  if (params.q) qs.set("q", params.q);
   if (params.page) qs.set("page", String(params.page));
   const suffix = qs.toString() ? `?${qs}` : "";
   return apiFetch<PlayerListResponse>(`/api/v1/players${suffix}`);

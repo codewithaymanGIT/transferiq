@@ -105,6 +105,12 @@ def assemble_training_matrix(db: Session) -> MatrixResult:
                 "assists": stats.assists,
                 "xg": float(stats.xg) if stats.xg is not None else None,
                 "xa": float(stats.xa) if stats.xa is not None else None,
+                # Real defensive stats from FBref's defense page -- see
+                # fbref_provider.py. Previously the model only had
+                # attacking stats to work with, forcing it to (wrongly)
+                # judge defenders on goals/assists.
+                "tackles": stats.tackles,
+                "interceptions": stats.interceptions,
                 "fee_eur_millions": float(transfer.fee_amount),
                 "log_fee": float(np.log1p(float(transfer.fee_amount))),
             }

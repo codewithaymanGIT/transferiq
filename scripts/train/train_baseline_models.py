@@ -41,7 +41,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 _CANDIDATE_NUMERIC_FEATURES = [
     "minutes", "goals", "assists", "xg", "xa",
     "goals_per90", "assists_per90", "xg_per90", "xa_per90",
-    "age_at_transfer",
+    "age_at_transfer", "tackles", "interceptions",
 ]
 # transfer_year tested and dropped: two runs (alone, and combined with
 # age_at_transfer) both made every model worse, not better -- likely

@@ -51,6 +51,8 @@ def _synthetic_training_matrix(n: int = 30, seed: int = 0) -> pd.DataFrame:
     goals = rng.poisson(3, n)
     assists = rng.poisson(2, n)
     ages = rng.uniform(18, 35, n)
+    tackles = rng.poisson(15, n)
+    interceptions = rng.poisson(10, n)
     fee = np.clip(10 - 0.3 * ages + 0.5 * goals + rng.normal(0, 3, n), 0.5, None)
     return pd.DataFrame(
         {
@@ -62,6 +64,8 @@ def _synthetic_training_matrix(n: int = 30, seed: int = 0) -> pd.DataFrame:
             "goals_per90": goals / (minutes / 90),
             "assists_per90": assists / (minutes / 90),
             "age_at_transfer": ages,
+            "tackles": tackles,
+            "interceptions": interceptions,
             "log_fee": np.log1p(fee),
         }
     )
@@ -73,7 +77,7 @@ def test_fit_final_model_produces_working_pipeline_on_full_data():
     # Fit on the FULL dataset -- no held-out split -- so predicting on the
     # same rows it was trained on should work without error and produce
     # real, finite numbers.
-    X = df[["minutes", "goals", "assists", "goals_per90", "assists_per90", "age_at_transfer", "position"]]
+    X = df[["minutes", "goals", "assists", "goals_per90", "assists_per90", "age_at_transfer", "tackles", "interceptions", "position"]]
     preds = pipeline.predict(X)
     assert len(preds) == len(df)
     assert np.all(np.isfinite(preds))
@@ -154,7 +158,7 @@ def test_compute_shap_contributions_eur_returns_one_dict_per_row():
     model = pipeline.named_steps["model"]
     prep = pipeline.named_steps["prep"]
 
-    X = df[["minutes", "goals", "assists", "goals_per90", "assists_per90", "age_at_transfer", "position"]]
+    X = df[["minutes", "goals", "assists", "goals_per90", "assists_per90", "age_at_transfer", "tackles", "interceptions", "position"]]
     X_transformed = prep.transform(X)
     predicted_value = np.expm1(pipeline.predict(X))
 
@@ -172,7 +176,7 @@ def test_compute_shap_contributions_eur_uses_clean_names_not_sklearn_internals()
     model = pipeline.named_steps["model"]
     prep = pipeline.named_steps["prep"]
 
-    X = df[["minutes", "goals", "assists", "goals_per90", "assists_per90", "age_at_transfer", "position"]]
+    X = df[["minutes", "goals", "assists", "goals_per90", "assists_per90", "age_at_transfer", "tackles", "interceptions", "position"]]
     X_transformed = prep.transform(X)
     predicted_value = np.expm1(pipeline.predict(X))
 

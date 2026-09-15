@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { getPlayer, getValuation } from "@/lib/api";
+import { ShapBarChart } from "@/components/ShapBarChart";
 
 export const dynamic = "force-dynamic";
 
@@ -24,22 +25,34 @@ export default async function PlayerProfilePage({ params }: { params: { id: stri
         <p className="mt-1 text-sm text-muted">{player.nationality ?? "Nationality unknown"}</p>
       </div>
 
-      <section className="border border-border px-6 py-6">
+      <section className="bg-surface px-6 py-6">
         <h2 className="font-display text-lg">Estimated market value</h2>
 
         {valuation ? (
           <div className="mt-4 space-y-3">
-            <p className="font-mono text-4xl text-accent">
-              £{Number(valuation.predicted_value).toLocaleString()}
-            </p>
+            <div className="flex items-baseline gap-3">
+              <p className="font-mono text-4xl text-accent">
+                &pound;{Number(valuation.predicted_value).toLocaleString()}m
+              </p>
+              <span
+                className={`border px-2 py-0.5 text-xs ${
+                  valuation.confidence === "Low"
+                    ? "border-negative/40 text-negative"
+                    : valuation.confidence === "Medium"
+                      ? "border-accent/40 text-accent"
+                      : "border-positive/40 text-positive"
+                }`}
+              >
+                {valuation.confidence} confidence
+              </span>
+            </div>
             <p className="text-sm text-muted">
-              Range £{Number(valuation.low_bound).toLocaleString()} – £
-              {Number(valuation.high_bound).toLocaleString()} · {valuation.confidence.toLowerCase()}{" "}
-              confidence · model {valuation.model_version}
+              Range &pound;{Number(valuation.low_bound).toLocaleString()}m to &pound;
+              {Number(valuation.high_bound).toLocaleString()}m, model {valuation.model_version}
             </p>
             {valuation.benchmark_value && (
               <p className="text-sm text-muted">
-                Benchmark £{Number(valuation.benchmark_value).toLocaleString()}
+                Benchmark &pound;{Number(valuation.benchmark_value).toLocaleString()}
                 {valuation.benchmark_difference_pct != null && (
                   <>
                     {" "}
@@ -52,8 +65,8 @@ export default async function PlayerProfilePage({ params }: { params: { id: stri
           </div>
         ) : (
           <p className="mt-3 max-w-md text-sm text-muted">
-            No model valuation yet. This player hasn&rsquo;t been scored by a
-            trained model — that lands once the ML pipeline (Phase 6/7) has run
+            No model valuation yet. This player has not been scored by a
+            trained model, since that lands once the ML pipeline has run
             against real ingested data. This page never shows a placeholder
             number in its place.
           </p>
@@ -61,29 +74,20 @@ export default async function PlayerProfilePage({ params }: { params: { id: stri
       </section>
 
       {valuation && Object.keys(valuation.shap_contributions).length > 0 && (
-        <section className="border border-border px-6 py-6">
+        <section className="bg-surface px-6 py-6">
           <h2 className="font-display text-lg">Why this valuation</h2>
           <p className="mt-1 text-sm text-muted">
             Approximate contribution of each feature to the prediction above, from a
-            real SHAP explainer on the trained model -- a first-order approximation,
+            real SHAP explainer on the trained model. A first-order approximation,
             not an exact decomposition.
           </p>
-          <div className="mt-4 space-y-2">
-            {Object.entries(valuation.shap_contributions)
-              .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
-              .slice(0, 8)
-              .map(([feature, value]) => (
-                <div
-                  key={feature}
-                  className="flex items-center justify-between border-b border-border py-1.5 last:border-b-0"
-                >
-                  <span className="text-sm text-muted">{feature}</span>
-                  <span className={`font-mono text-sm ${value >= 0 ? "text-accent" : "text-muted"}`}>
-                    {value >= 0 ? "+" : ""}
-                    £{value.toFixed(1)}m
-                  </span>
-                </div>
-              ))}
+          <div className="mt-6">
+            <ShapBarChart
+              contributions={Object.entries(valuation.shap_contributions)
+                .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
+                .slice(0, 8)
+                .map(([feature, value]) => ({ feature, value }))}
+            />
           </div>
         </section>
       )}

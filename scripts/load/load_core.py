@@ -151,6 +151,12 @@ def _upsert_season_stats(
         assists=int(row["assists"]) if pd.notna(row.get("assists")) else None,
         xg=float(row["xg"]) if pd.notna(row.get("xg")) else None,
         xa=float(row["xa"]) if pd.notna(row.get("xa")) else None,
+        # Real tackles-WON count from FBref's defense page (Tkl+Int table),
+        # stored in the schema's "tackles" column. Not the same as FBref's
+        # raw "Tkl" (tackle attempts) column, which is blank in this pull --
+        # documented here rather than silently conflated.
+        tackles=int(row["tackles_won"]) if pd.notna(row.get("tackles_won")) else None,
+        interceptions=int(row["interceptions"]) if pd.notna(row.get("interceptions")) else None,
         source_id=source_id,
     )
     if existing is None:

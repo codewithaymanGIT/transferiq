@@ -39,6 +39,7 @@ def list_players(
     db: Session = Depends(get_db),
     position: schemas.PositionLiteral | None = Query(default=None),
     club_id: int | None = Query(default=None),
+    q: str | None = Query(default=None, description="Case-insensitive substring match on player name."),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=100),
 ) -> schemas.PlayerListResponse:
@@ -51,6 +52,10 @@ def list_players(
     if club_id is not None:
         stmt = stmt.where(models.Player.current_club_id == club_id)
         count_stmt = count_stmt.where(models.Player.current_club_id == club_id)
+    if q:
+        name_filter = models.Player.name.ilike(f"%{q}%")
+        stmt = stmt.where(name_filter)
+        count_stmt = count_stmt.where(name_filter)
 
     total = db.scalar(count_stmt) or 0
     stmt = stmt.order_by(models.Player.name).offset((page - 1) * page_size).limit(page_size)

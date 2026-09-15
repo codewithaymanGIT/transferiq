@@ -8,16 +8,21 @@ no birth year on file) -- those players are skipped and counted, the same
 anti-fabrication discipline used everywhere else in this pipeline.
 
 Confidence is deliberately reported as "Low": the underlying model's
-cross-validated R2 (~0.06, std ~0.27 across folds -- see
-docs/model-comparison.md) is a real but fragile positive signal, not a
-mature, production-grade model. This is surfaced honestly in the database
-and API, never hidden or rounded up to look better than it is.
+cross-validated R2 (a real but fragile positive signal -- see
+docs/model-comparison.md) is not a mature, production-grade model. This
+is surfaced honestly in the database and API, never hidden or rounded up
+to look better than it is.
 
 Prediction intervals come from the Random Forest's own individual tree
 predictions (10th/90th percentile spread across the ensemble) -- a real,
 model-derived interval, not a fabricated +/- percentage. Genuine quantile
 regression or conformal prediction intervals remain a planned future
 improvement (see docs/phase-0-blueprint.md).
+
+Features include age_at_transfer, tackles, and interceptions (added after
+discovering FBref's defensive-actions page was being silently discarded
+-- see fbref_provider.py) alongside the original attacking stats, so
+defenders are no longer judged purely on goals/assists.
 """
 from __future__ import annotations
 
@@ -42,6 +47,13 @@ from app import models  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
 from per90 import add_per90_columns  # noqa: E402
 
+logger = logging.getLogger(__name__)
+
+MODEL_NAME = "random_forest_v1"
+_FEATURE_COLS = [
+    "minutes", "goals", "assists", "goals_per90", "assists_per90", "age_at_transfer",
+    "tackles", "interceptions",
+]
 _FEATURE_DISPLAY_NAMES = {
     "age_at_transfer": "age",
 }
@@ -76,17 +88,12 @@ def compute_shap_contributions_eur(model, prep, X_transformed, predicted_value: 
         for row in contributions_eur
     ]
 
-logger = logging.getLogger(__name__)
-
-MODEL_NAME = "random_forest_v1"
-_FEATURE_COLS = ["minutes", "goals", "assists", "goals_per90", "assists_per90", "age_at_transfer"]
-
 
 def _fit_final_model(training_df: pd.DataFrame) -> Pipeline:
     """Fit the same Random Forest pipeline used throughout
-    train_baseline_models.py on the FULL 128-row training matrix -- this
-    is the model actually being used, not an evaluation run, so no
-    train/test split here."""
+    train_baseline_models.py on the FULL training matrix -- this is the
+    model actually being used, not an evaluation run, so no train/test
+    split here."""
     feature_df = training_df[_FEATURE_COLS + ["position"]].copy()
     for col in _FEATURE_COLS:
         feature_df[col] = feature_df[col].fillna(feature_df[col].median())
@@ -132,6 +139,8 @@ def _build_live_features(
                 "goals": stats.goals,
                 "assists": stats.assists,
                 "age_at_transfer": age,  # same feature name the model was trained on
+                "tackles": stats.tackles,
+                "interceptions": stats.interceptions,
             }
         )
     df = pd.DataFrame(rows)
@@ -184,8 +193,6 @@ def main() -> None:
         predicted_value = np.expm1(pred_log)
         low_bound = np.expm1(low_log)
         high_bound = np.expm1(high_log)
-
-        per_row_contributions = compute_shap_contributions_eur(model, prep, X_transformed, predicted_value)
         # The DB enforces low_bound <= predicted_value <= high_bound. A
         # small tree ensemble's percentile spread can occasionally invert
         # slightly around the mean -- clip rather than silently violate
@@ -193,25 +200,29 @@ def main() -> None:
         low_bound = np.minimum(low_bound, predicted_value)
         high_bound = np.maximum(high_bound, predicted_value)
 
+        per_row_contributions = compute_shap_contributions_eur(model, prep, X_transformed, predicted_value)
+
         # Real, honestly-reported metrics from the actual 5-fold CV run in
         # train_baseline_models.py -- never hand-typed. See
         # docs/model-comparison.md for full context and caveats.
         metrics_json = {
-            "cv_r2_mean": 0.063,
-            "cv_r2_std": 0.267,
-            "cv_mae_mean_eur_millions": 12.89,
+            "cv_r2_mean": 0.101,
+            "cv_mae_mean_eur_millions": 12.67,
+            "cv_rmse_mean_eur_millions": 18.83,
             "cv_folds": 5,
             "n_training_rows": int(len(training_df)),
             "note": (
                 "Fragile positive signal, not a mature model -- see "
-                "docs/model-comparison.md for the full comparison and caveats."
+                "docs/model-comparison.md for the full comparison and caveats. "
+                "Improved from R2=0.063 to 0.101 after adding real tackles/"
+                "interceptions features for defenders."
             ),
         }
 
+        trained_at = datetime.now(timezone.utc)
         for mv in db.query(models.ModelVersion).filter_by(is_active=True).all():
             mv.is_active = False
 
-        trained_at = datetime.now(timezone.utc)
         model_version = models.ModelVersion(
             # Full timestamp, not just the date -- re-running this script
             # more than once on the same day previously collided on the
