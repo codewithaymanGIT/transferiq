@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { getPlayer, getValuation } from "@/lib/api";
 import { ShapBarChart } from "@/components/ShapBarChart";
+import { PlayerAvatar } from "@/components/PlayerAvatar";
+import { ClubBadge } from "@/components/ClubBadge";
 
 export const dynamic = "force-dynamic";
 
@@ -19,13 +21,25 @@ export default async function PlayerProfilePage({ params }: { params: { id: stri
 
   return (
     <div className="space-y-8">
-      <div>
-        <p className="font-mono text-sm text-muted">{player.position}</p>
-        <h1 className="font-display text-3xl font-semibold tracking-tight">{player.name}</h1>
-        <p className="mt-1 text-sm text-muted">{player.nationality ?? "Nationality unknown"}</p>
+      <div className="flex items-center gap-5">
+        <PlayerAvatar name={player.name} position={player.position} size="lg" />
+        <div>
+          <p className="font-mono text-sm text-muted">{player.position}</p>
+          <h1 className="font-display text-3xl font-semibold tracking-tight">{player.name}</h1>
+          <div className="mt-1.5 flex items-center gap-2 text-sm text-muted">
+            {player.club_name && (
+              <span className="flex items-center gap-1.5">
+                <ClubBadge name={player.club_name} size="sm" />
+                {player.club_name}
+              </span>
+            )}
+            {player.club_name && player.nationality && <span className="text-border">&middot;</span>}
+            <span>{player.nationality ?? "Nationality unknown"}</span>
+          </div>
+        </div>
       </div>
 
-      <section className="bg-surface px-6 py-6">
+      <section className="rounded-xl bg-surface px-6 py-6 shadow-sm">
         <h2 className="font-display text-lg">Estimated market value</h2>
 
         {valuation ? (
@@ -35,7 +49,7 @@ export default async function PlayerProfilePage({ params }: { params: { id: stri
                 &pound;{Number(valuation.predicted_value).toLocaleString()}m
               </p>
               <span
-                className={`border px-2 py-0.5 text-xs ${
+                className={`rounded-full border px-2.5 py-0.5 text-xs ${
                   valuation.confidence === "Low"
                     ? "border-negative/40 text-negative"
                     : valuation.confidence === "Medium"
@@ -74,7 +88,7 @@ export default async function PlayerProfilePage({ params }: { params: { id: stri
       </section>
 
       {valuation && Object.keys(valuation.shap_contributions).length > 0 && (
-        <section className="bg-surface px-6 py-6">
+        <section className="rounded-xl bg-surface px-6 py-6 shadow-sm">
           <h2 className="font-display text-lg">Why this valuation</h2>
           <p className="mt-1 text-sm text-muted">
             Approximate contribution of each feature to the prediction above, from a
@@ -87,9 +101,9 @@ export default async function PlayerProfilePage({ params }: { params: { id: stri
                 .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
                 .slice(0, 8)
                 .map(([feature, value]) => ({ feature, value }))}
-            />
-          </div>
-        </section>
+          />
+        </div>
+      </section>
       )}
     </div>
   );

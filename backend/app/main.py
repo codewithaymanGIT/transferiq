@@ -13,7 +13,7 @@ import logging
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from . import models, schemas
 from .db import get_db
@@ -43,7 +43,7 @@ def list_players(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=100),
 ) -> schemas.PlayerListResponse:
-    stmt = select(models.Player)
+    stmt = select(models.Player).options(joinedload(models.Player.club))
     count_stmt = select(func.count()).select_from(models.Player)
 
     if position is not None:

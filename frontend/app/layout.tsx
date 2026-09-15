@@ -28,16 +28,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${spaceGrotesk.variable} ${plexSans.variable} ${plexMono.variable}`}>
       <body>
-        <header className="border-b border-border">
+        <header className="sticky top-0 z-10 border-b border-border/80 bg-base/85 backdrop-blur-md">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-            <a href="/" className="font-display text-lg font-semibold tracking-tight">
+            <a href="/" className="flex items-center gap-2 font-display text-lg font-semibold tracking-tight">
+              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-accent to-accentDim text-sm text-base">
+                T
+              </span>
               TransferIQ
             </a>
-            <nav className="flex gap-6 font-body text-sm text-muted">
-              <a href="/" className="hover:text-foreground transition-colors">
+            <nav className="flex gap-1 font-body text-sm text-muted">
+              <a
+                href="/"
+                className="rounded-md px-3 py-1.5 transition-colors duration-150 hover:bg-raised hover:text-foreground"
+              >
                 Dashboard
               </a>
-              <a href="/players" className="hover:text-foreground transition-colors">
+              <a
+                href="/players"
+                className="rounded-md px-3 py-1.5 transition-colors duration-150 hover:bg-raised hover:text-foreground"
+              >
                 Players
               </a>
             </nav>

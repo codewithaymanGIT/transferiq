@@ -1,16 +1,16 @@
 # Model comparison
 
-Generated 2026-09-14T11:15:26+00:00 by `scripts/train/train_baseline_models.py` -- every number below comes from an actual sklearn/xgboost fit on real data, never hand-typed.
+Generated 2026-09-15T20:11:48+00:00 by `scripts/train/train_baseline_models.py` -- every number below comes from an actual sklearn/xgboost fit on real data, never hand-typed.
 
 Features used: minutes, goals, assists, goals_per90, assists_per90, age_at_transfer, tackles, interceptions, position (one-hot).
 
 | Model | MAE (EUR m) | RMSE (EUR m) | Median AE (EUR m) | R² | n_train | n_test |
 |---|---|---|---|---|---|---|
 | Median baseline | 11.27 | 16.99 | 7.70 | -0.044 | 102 | 26 |
-| Linear Regression | 19.00 | 25.71 | 14.46 | -1.389 | 102 | 26 |
-| Ridge | 17.77 | 24.07 | 14.69 | -1.095 | 102 | 26 |
-| Random Forest | 15.64 | 20.54 | 12.81 | -0.525 | 102 | 26 |
-| XGBoost | 17.70 | 24.30 | 10.74 | -1.135 | 102 | 26 |
+| Linear Regression | 19.25 | 25.78 | 14.42 | -1.403 | 102 | 26 |
+| Ridge | 17.88 | 23.95 | 14.61 | -1.073 | 102 | 26 |
+| Random Forest | 16.23 | 20.79 | 12.57 | -0.563 | 102 | 26 |
+| XGBoost | 18.29 | 24.71 | 11.04 | -1.207 | 102 | 26 |
 
 ## Cross-validated results (5-fold)
 
@@ -19,10 +19,10 @@ Averaged over multiple folds rather than one fixed 80/20 split -- at this sample
 | Model | Mean MAE (EUR m) | Mean RMSE (EUR m) | Mean R2 | R2 std dev |
 |---|---|---|---|---|
 | Median baseline | 14.78 | 20.98 | -0.084 | 0.086 |
-| Linear Regression | 13.66 | 20.00 | -0.093 | 0.676 |
-| Ridge | 13.36 | 19.79 | -0.042 | 0.556 |
-| Random Forest | 12.67 | 18.83 | 0.101 | 0.267 |
-| XGBoost | 13.48 | 20.20 | -0.079 | 0.532 |
+| Linear Regression | 13.85 | 20.34 | -0.122 | 0.671 |
+| Ridge | 13.52 | 20.02 | -0.059 | 0.542 |
+| Random Forest | 12.88 | 19.13 | 0.065 | 0.294 |
+| XGBoost | 13.70 | 20.30 | -0.094 | 0.561 |
 
 ## Random Forest feature importances
 
@@ -30,18 +30,18 @@ Fit on the full dataset (not a held-out split) purely to see which features this
 
 | Feature | Importance |
 |---|---|
-| age_at_transfer | 0.412 |
-| minutes | 0.161 |
-| assists_per90 | 0.096 |
-| goals_per90 | 0.078 |
-| assists | 0.064 |
-| goals | 0.059 |
-| interceptions | 0.056 |
-| tackles | 0.051 |
-| position=MF | 0.013 |
-| position=DF | 0.005 |
-| position=FW | 0.004 |
-| position=GK | 0.001 |
+| age_at_transfer | 0.415 |
+| minutes | 0.163 |
+| assists_per90 | 0.101 |
+| goals_per90 | 0.073 |
+| goals | 0.063 |
+| assists | 0.062 |
+| interceptions | 0.055 |
+| tackles | 0.052 |
+| position=MF | 0.009 |
+| position=DF | 0.004 |
+| position=FW | 0.003 |
+| position=GK | 0.000 |
 
 ## SHAP feature importance (mean |SHAP value|)
 
@@ -49,15 +49,15 @@ Real SHAP values from shap.TreeExplainer on the Random Forest model, fit on the 
 
 | Feature | Mean |SHAP value| |
 |---|---|
-| age_at_transfer | 0.4344 |
-| minutes | 0.1787 |
-| goals | 0.0691 |
-| assists_per90 | 0.0626 |
-| assists | 0.0585 |
-| goals_per90 | 0.0574 |
-| interceptions | 0.0377 |
-| tackles | 0.0300 |
-| position=MF | 0.0248 |
-| position=FW | 0.0048 |
-| position=DF | 0.0044 |
-| position=GK | 0.0006 |
+| age_at_transfer | 0.4352 |
+| minutes | 0.1819 |
+| goals | 0.0684 |
+| assists_per90 | 0.0653 |
+| goals_per90 | 0.0550 |
+| assists | 0.0531 |
+| interceptions | 0.0376 |
+| tackles | 0.0314 |
+| position=MF | 0.0126 |
+| position=DF | 0.0031 |
+| position=FW | 0.0031 |
+| position=GK | 0.0004 |

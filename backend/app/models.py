@@ -140,6 +140,15 @@ class Player(Base):
 
     season_stats: Mapped[list["PlayerSeasonStats"]] = relationship(back_populates="player")
     transfers: Mapped[list["Transfer"]] = relationship(back_populates="player")
+    club: Mapped["Club | None"] = relationship(foreign_keys=[current_club_id])
+
+    @property
+    def club_name(self) -> str | None:
+        """Read-only convenience for API serialization -- the schema's
+        current_club_id alone isn't enough to render a club name or badge
+        in the frontend, and this avoids a second query per player when
+        combined with joinedload(Player.club) in the list endpoint."""
+        return self.club.name if self.club else None
 
 
 class PlayerSeasonStats(Base):

@@ -15,6 +15,7 @@ export interface Player {
   nationality: string | null;
   position: "GK" | "DF" | "MF" | "FW";
   current_club_id: number | null;
+  club_name: string | null;
 }
 
 export interface PlayerListResponse {

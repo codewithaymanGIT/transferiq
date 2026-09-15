@@ -1,15 +1,17 @@
 import Link from "next/link";
 import { listPlayers } from "@/lib/api";
+import { PlayerAvatar } from "@/components/PlayerAvatar";
+import { ClubBadge } from "@/components/ClubBadge";
 
 export const dynamic = "force-dynamic";
 
 const POSITIONS = ["GK", "DF", "MF", "FW"] as const;
 
 const POSITION_COLOR: Record<string, string> = {
-  GK: "text-accent border-accent/40",
-  DF: "text-positive border-positive/40",
-  MF: "text-foreground border-border",
-  FW: "text-negative border-negative/40",
+  GK: "text-accent border-accent/30 bg-accent/10",
+  DF: "text-positive border-positive/30 bg-positive/10",
+  MF: "text-foreground border-border bg-raised",
+  FW: "text-negative border-negative/30 bg-negative/10",
 };
 
 export default async function PlayersPage({
@@ -48,11 +50,11 @@ export default async function PlayersPage({
           name="q"
           defaultValue={q ?? ""}
           placeholder="Search players by name"
-          className="w-full max-w-xs bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted focus:outline-none"
+          className="w-full max-w-xs rounded-lg bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted transition-shadow duration-150 focus:outline-none focus:ring-2 focus:ring-accent/40"
         />
         <button
           type="submit"
-          className="border border-border px-4 py-2 text-sm text-muted transition-colors hover:text-foreground"
+          className="rounded-lg border border-border px-4 py-2 text-sm text-muted transition-colors duration-150 hover:border-accent/40 hover:text-foreground"
         >
           Search
         </button>
@@ -70,47 +72,46 @@ export default async function PlayersPage({
       </div>
 
       {errored && (
-        <p className="border border-negative/40 bg-negative/10 px-5 py-4 text-sm text-negative">
+        <p className="rounded-lg border border-negative/40 bg-negative/10 px-5 py-4 text-sm text-negative">
           Can&rsquo;t reach the API right now.
         </p>
       )}
 
       {!errored && items.length === 0 && (
-        <div className="border border-border px-6 py-10 text-center text-sm text-muted">
+        <div className="rounded-lg border border-border px-6 py-10 text-center text-sm text-muted">
           No players match this search.
         </div>
       )}
 
       {!errored && items.length > 0 && (
-        <div className="bg-surface">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-muted">
-                <th className="px-5 py-3 font-normal">Name</th>
-                <th className="px-5 py-3 font-normal">Position</th>
-                <th className="px-5 py-3 font-normal">Nationality</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((p) => (
-                <tr key={p.id} className="border-b border-border/60 transition-colors hover:bg-raised">
-                  <td className="px-5 py-3">
-                    <Link href={`/players/${p.id}`} className="hover:text-accent transition-colors">
-                      {p.name}
-                    </Link>
-                  </td>
-                  <td className="px-5 py-3">
-                    <span
-                      className={`inline-block border px-2 py-0.5 font-mono text-xs ${POSITION_COLOR[p.position]}`}
-                    >
-                      {p.position}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {items.map((p) => (
+            <Link
+              key={p.id}
+              href={`/players/${p.id}`}
+              className="group flex items-center gap-3 rounded-xl bg-surface p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-raised hover:shadow-lg hover:shadow-black/20"
+            >
+              <PlayerAvatar name={p.name} position={p.position} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-display text-sm font-medium text-foreground transition-colors group-hover:text-accent">
+                  {p.name}
+                </p>
+                <div className="mt-1 flex items-center gap-1.5">
+                  <span
+                    className={`rounded border px-1.5 py-0.5 font-mono text-[10px] ${POSITION_COLOR[p.position]}`}
+                  >
+                    {p.position}
+                  </span>
+                  {p.club_name && (
+                    <span className="flex items-center gap-1 truncate text-xs text-muted">
+                      <ClubBadge name={p.club_name} size="sm" />
+                      {p.club_name}
                     </span>
-                  </td>
-                  <td className="px-5 py-3 text-muted">{p.nationality ?? "\u2014"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  )}
+                </div>
+              </div>
+            </Link>
+          ))}
         </div>
       )}
     </div>
@@ -135,7 +136,7 @@ function FilterLink({
   return (
     <Link
       href={href}
-      className={`border px-3 py-1 transition-colors ${
+      className={`rounded-lg border px-3 py-1 transition-colors duration-150 ${
         active ? "border-accent text-accent" : "border-border text-muted hover:text-foreground"
       }`}
     >
