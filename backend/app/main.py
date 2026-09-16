@@ -125,3 +125,63 @@ def get_valuation(player_id: int, db: Session = Depends(get_db)) -> schemas.Valu
         benchmark_difference_pct=benchmark_diff_pct,
         shap_contributions=latest_pred.shap_contributions or {},
     )
+
+
+@app.get("/api/v1/predictions/top", response_model=schemas.TopValuationsResponse, tags=["predictions"])
+def top_valuations(
+    db: Session = Depends(get_db),
+    position: schemas.PositionLiteral | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+) -> schemas.TopValuationsResponse:
+    """Real predictions from the currently active model version, ranked by
+    predicted value. Reuses the same Prediction rows already served
+    per-player -- never a separate/fabricated ranking. Never mixes
+    predictions across different model_version rows (only the active one)."""
+    active_mv = db.scalar(select(models.ModelVersion).where(models.ModelVersion.is_active.is_(True)))
+    if active_mv is None:
+        return schemas.TopValuationsResponse(items=[], total=0, page=page, page_size=page_size)
+
+    base_stmt = (
+        select(models.Prediction, models.Player)
+        .join(models.Player, models.Player.id == models.Prediction.player_id)
+        .options(joinedload(models.Player.club))
+        .where(models.Prediction.model_version_id == active_mv.id)
+    )
+    count_stmt = (
+        select(func.count())
+        .select_from(models.Prediction)
+        .join(models.Player, models.Player.id == models.Prediction.player_id)
+        .where(models.Prediction.model_version_id == active_mv.id)
+    )
+    if position is not None:
+        base_stmt = base_stmt.where(models.Player.position == position)
+        count_stmt = count_stmt.where(models.Player.position == position)
+
+    total = db.scalar(count_stmt) or 0
+    base_stmt = (
+        base_stmt.order_by(models.Prediction.predicted_value.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    rows = db.execute(base_stmt).all()
+
+    items = []
+    for pr, player in rows:
+        top_feature = None
+        top_value = None
+        if pr.shap_contributions:
+            top_feature, top_value = max(pr.shap_contributions.items(), key=lambda kv: abs(kv[1]))
+        items.append(
+            schemas.TopValuationOut(
+                player_id=player.id,
+                player_name=player.name,
+                position=player.position.value,
+                club_name=player.club.name if player.club else None,
+                predicted_value=str(pr.predicted_value),
+                confidence=pr.confidence,
+                top_driver_feature=top_feature,
+                top_driver_value=top_value,
+            )
+        )
+    return schemas.TopValuationsResponse(items=items, total=total, page=page, page_size=page_size)

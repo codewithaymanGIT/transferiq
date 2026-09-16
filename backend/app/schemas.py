@@ -58,3 +58,24 @@ class ValuationOut(BaseModel):
 
 class ErrorResponse(BaseModel):
     detail: str
+
+
+class TopValuationOut(BaseModel):
+    """One row in the top-valuations leaderboard -- reuses the same real
+    Prediction rows already served by /players/{id}/valuation, just
+    re-sorted and joined with player identity for a ranked view."""
+    player_id: int
+    player_name: str
+    position: PositionLiteral
+    club_name: str | None
+    predicted_value: str
+    confidence: str
+    top_driver_feature: str | None
+    top_driver_value: float | None
+
+
+class TopValuationsResponse(BaseModel):
+    items: list[TopValuationOut]
+    total: int
+    page: int
+    page_size: int

@@ -49,6 +49,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               >
                 Players
               </a>
+              <a
+                href="/rankings"
+                className="rounded-md px-3 py-1.5 transition-colors duration-150 hover:bg-raised hover:text-foreground"
+              >
+                Rankings
+              </a>
             </nav>
           </div>
         </header>

@@ -77,3 +77,30 @@ export async function getValuation(id: number): Promise<Valuation | null> {
     throw err;
   }
 }
+
+
+export interface TopValuation {
+  player_id: number;
+  player_name: string;
+  position: "GK" | "DF" | "MF" | "FW";
+  club_name: string | null;
+  predicted_value: string;
+  confidence: "High" | "Medium" | "Low";
+  top_driver_feature: string | null;
+  top_driver_value: number | null;
+}
+
+export interface TopValuationsResponse {
+  items: TopValuation[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export function listTopValuations(params: { position?: string; page?: number } = {}) {
+  const qs = new URLSearchParams();
+  if (params.position) qs.set("position", params.position);
+  if (params.page) qs.set("page", String(params.page));
+  const suffix = qs.toString() ? `?${qs}` : "";
+  return apiFetch<TopValuationsResponse>(`/api/v1/predictions/top${suffix}`);
+}
