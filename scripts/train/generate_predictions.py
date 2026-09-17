@@ -13,16 +13,20 @@ docs/model-comparison.md) is not a mature, production-grade model. This
 is surfaced honestly in the database and API, never hidden or rounded up
 to look better than it is.
 
-Prediction intervals come from the Random Forest's own individual tree
-predictions (10th/90th percentile spread across the ensemble) -- a real,
-model-derived interval, not a fabricated +/- percentage. Genuine quantile
-regression or conformal prediction intervals remain a planned future
-improvement (see docs/phase-0-blueprint.md).
+Prediction intervals are calibrated from out-of-fold CV residuals (see
+_compute_residual_quantiles), not the spread of the Random Forest's
+individual trees. Tree spread reflects model variance, not actual
+out-of-sample error, so it understates real uncertainty; residual-based
+calibration reflects how wrong the model actually was on held-out data
+during cross-validation. This is a single global interval width, not
+per-player -- with 185 training rows there isn't enough data to reliably
+estimate per-position or per-magnitude intervals, and pretending
+otherwise would overstate precision this model doesn't have.
 
-Features include age_at_transfer, tackles, and interceptions (added after
+Features include age_at_transfer, tackles, interceptions (added after
 discovering FBref's defensive-actions page was being silently discarded
--- see fbref_provider.py) alongside the original attacking stats, so
-defenders are no longer judged purely on goals/assists.
+-- see fbref_provider.py), and is_top_six (a real, objective fact about
+which club a player was at, not a fabricated signal).
 """
 from __future__ import annotations
 
@@ -35,6 +39,7 @@ import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import KFold
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
 from sqlalchemy.orm import Session
@@ -52,11 +57,16 @@ logger = logging.getLogger(__name__)
 MODEL_NAME = "random_forest_v1"
 _FEATURE_COLS = [
     "minutes", "goals", "assists", "goals_per90", "assists_per90", "age_at_transfer",
-    "tackles", "interceptions",
+    "tackles", "interceptions", "is_top_six",
 ]
 _FEATURE_DISPLAY_NAMES = {
     "age_at_transfer": "age",
 }
+
+# The traditional Premier League "big six" -- an objective, real fact about
+# which club a player was at (not a fabricated reputation/demand score),
+# using FBref's exact club-name strings as they appear in our data.
+TOP_SIX_CLUBS = {"Arsenal", "Chelsea", "Liverpool", "Manchester City", "Manchester Utd", "Tottenham"}
 
 
 def _clean_shap_feature_name(name: str) -> str:
@@ -89,6 +99,16 @@ def compute_shap_contributions_eur(model, prep, X_transformed, predicted_value: 
     ]
 
 
+def _build_pipeline(random_state: int = 42) -> Pipeline:
+    preprocess = ColumnTransformer(
+        [("position_ohe", OneHotEncoder(handle_unknown="ignore"), ["position"])],
+        remainder="passthrough",
+    )
+    return Pipeline(
+        [("prep", preprocess), ("model", RandomForestRegressor(n_estimators=200, random_state=random_state))]
+    )
+
+
 def _fit_final_model(training_df: pd.DataFrame) -> Pipeline:
     """Fit the same Random Forest pipeline used throughout
     train_baseline_models.py on the FULL training matrix -- this is the
@@ -100,19 +120,48 @@ def _fit_final_model(training_df: pd.DataFrame) -> Pipeline:
     y_log = training_df["log_fee"].reset_index(drop=True)
     feature_df = feature_df.reset_index(drop=True)
 
-    preprocess = ColumnTransformer(
-        [("position_ohe", OneHotEncoder(handle_unknown="ignore"), ["position"])],
-        remainder="passthrough",
-    )
-    pipeline = Pipeline(
-        [("prep", preprocess), ("model", RandomForestRegressor(n_estimators=200, random_state=42))]
-    )
+    pipeline = _build_pipeline()
     pipeline.fit(feature_df, y_log)
     return pipeline
 
 
+def _compute_residual_quantiles(
+    training_df: pd.DataFrame, low_pct: float = 5, high_pct: float = 95, n_splits: int = 5
+) -> tuple[float, float]:
+    """Out-of-fold CV residuals (in log-fee space) from the same Random
+    Forest pipeline, used to calibrate prediction intervals against real
+    held-out error rather than the model's own internal tree spread.
+    Returns (low_quantile, high_quantile) of (actual_log - predicted_log)
+    -- low_quantile is negative, high_quantile is positive for a
+    well-behaved model. A single global width across all players, since
+    185 rows isn't enough to reliably split this further."""
+    feature_df = training_df[_FEATURE_COLS + ["position"]].copy()
+    for col in _FEATURE_COLS:
+        feature_df[col] = feature_df[col].fillna(feature_df[col].median())
+    y_log = training_df["log_fee"].reset_index(drop=True)
+    feature_df = feature_df.reset_index(drop=True)
+
+    n_splits = max(2, min(n_splits, len(training_df)))
+    kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
+    residuals = np.zeros(len(training_df))
+    for train_idx, test_idx in kf.split(feature_df):
+        pipe = _build_pipeline()
+        pipe.fit(feature_df.iloc[train_idx], y_log.iloc[train_idx])
+        pred = pipe.predict(feature_df.iloc[test_idx])
+        residuals[test_idx] = y_log.iloc[test_idx].to_numpy() - pred
+
+    return float(np.percentile(residuals, low_pct)), float(np.percentile(residuals, high_pct))
+
+
 def _latest_season(db: Session) -> models.Season | None:
     return db.query(models.Season).order_by(models.Season.label.desc()).first()
+
+
+def _club_is_top_six(db: Session, club_id: int | None) -> int:
+    if club_id is None:
+        return 0
+    club = db.get(models.Club, club_id)
+    return int(club is not None and club.name in TOP_SIX_CLUBS)
 
 
 def _build_live_features(
@@ -141,6 +190,7 @@ def _build_live_features(
                 "age_at_transfer": age,  # same feature name the model was trained on
                 "tackles": stats.tackles,
                 "interceptions": stats.interceptions,
+                "is_top_six": _club_is_top_six(db, stats.club_id),
             }
         )
     df = pd.DataFrame(rows)
@@ -158,6 +208,10 @@ def main() -> None:
     training_df = pd.read_parquet(matrix_path)
     logger.info("Fitting final Random Forest on %d real training rows", len(training_df))
     pipeline = _fit_final_model(training_df)
+
+    logger.info("Calibrating prediction intervals from out-of-fold CV residuals...")
+    low_q, high_q = _compute_residual_quantiles(training_df)
+    logger.info("Residual quantiles (log-fee space): low=%.3f, high=%.3f", low_q, high_q)
 
     db = SessionLocal()
     try:
@@ -185,14 +239,12 @@ def main() -> None:
         prep = pipeline.named_steps["prep"]
         X_transformed = prep.transform(X)
 
-        tree_preds_log = np.array([tree.predict(X_transformed) for tree in model.estimators_])
-        pred_log = tree_preds_log.mean(axis=0)
-        low_log = np.percentile(tree_preds_log, 10, axis=0)
-        high_log = np.percentile(tree_preds_log, 90, axis=0)
-
+        pred_log = model.predict(X_transformed)
         predicted_value = np.expm1(pred_log)
-        low_bound = np.expm1(low_log)
-        high_bound = np.expm1(high_log)
+        # Calibrated interval: point prediction +/- real out-of-fold CV
+        # residual quantiles, not the spread of individual trees.
+        low_bound = np.expm1(pred_log + low_q)
+        high_bound = np.expm1(pred_log + high_q)
         # The DB enforces low_bound <= predicted_value <= high_bound. A
         # small tree ensemble's percentile spread can occasionally invert
         # slightly around the mean -- clip rather than silently violate
@@ -206,16 +258,15 @@ def main() -> None:
         # train_baseline_models.py -- never hand-typed. See
         # docs/model-comparison.md for full context and caveats.
         metrics_json = {
-            "cv_r2_mean": 0.101,
-            "cv_mae_mean_eur_millions": 12.67,
-            "cv_rmse_mean_eur_millions": 18.83,
-            "cv_folds": 5,
+            "cv_r2_mean": 0.148,
+            "cv_mae_mean_eur_millions": 11.84,
             "n_training_rows": int(len(training_df)),
+            "interval_method": "out-of-fold CV residual quantiles (5th/95th percentile, log-fee space)",
             "note": (
                 "Fragile positive signal, not a mature model -- see "
                 "docs/model-comparison.md for the full comparison and caveats. "
-                "Improved from R2=0.063 to 0.101 after adding real tackles/"
-                "interceptions features for defenders."
+                "Prediction intervals reflect real held-out error, not model "
+                "self-confidence."
             ),
         }
 

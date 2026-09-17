@@ -55,6 +55,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               >
                 Rankings
               </a>
+              <a
+                href="/compare"
+                className="rounded-md px-3 py-1.5 transition-colors duration-150 hover:bg-raised hover:text-foreground"
+              >
+                Compare
+              </a>
             </nav>
           </div>
         </header>

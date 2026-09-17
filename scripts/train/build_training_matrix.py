@@ -111,6 +111,14 @@ def assemble_training_matrix(db: Session) -> MatrixResult:
                 # judge defenders on goals/assists.
                 "tackles": stats.tackles,
                 "interceptions": stats.interceptions,
+                # Real, objective fact -- the traditional PL "big six" --
+                # not a fabricated reputation/demand score. See
+                # generate_predictions.py for the exact club-name set.
+                "is_top_six": int(
+                    stats.club_id is not None
+                    and (club := db.get(models.Club, stats.club_id)) is not None
+                    and club.name in {"Arsenal", "Chelsea", "Liverpool", "Manchester City", "Manchester Utd", "Tottenham"}
+                ),
                 "fee_eur_millions": float(transfer.fee_amount),
                 "log_fee": float(np.log1p(float(transfer.fee_amount))),
             }
