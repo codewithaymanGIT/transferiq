@@ -17,21 +17,26 @@ const POSITION_COLOR: Record<string, string> = {
 export default async function PlayersPage({
   searchParams,
 }: {
-  searchParams: { position?: string; q?: string };
+  searchParams: { position?: string; q?: string; page?: string };
 }) {
   const position = searchParams.position;
   const q = searchParams.q;
+  const page = Math.max(1, Number(searchParams.page) || 1);
   let items: Awaited<ReturnType<typeof listPlayers>>["items"] = [];
   let total = 0;
+  let pageSize = 25;
   let errored = false;
 
   try {
-    const data = await listPlayers({ position, q, page: 1 });
+    const data = await listPlayers({ position, q, page });
     items = data.items;
     total = data.total;
+    pageSize = data.page_size;
   } catch {
     errored = true;
   }
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const baseParams = new URLSearchParams();
   if (q) baseParams.set("q", q);
@@ -84,35 +89,61 @@ export default async function PlayersPage({
       )}
 
       {!errored && items.length > 0 && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map((p) => (
-            <Link
-              key={p.id}
-              href={`/players/${p.id}`}
-              className="group flex items-center gap-3 rounded-xl bg-surface p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-raised hover:shadow-lg hover:shadow-black/20"
-            >
-              <PlayerAvatar name={p.name} position={p.position} />
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-display text-sm font-medium text-foreground transition-colors group-hover:text-accent">
-                  {p.name}
-                </p>
-                <div className="mt-1 flex items-center gap-1.5">
-                  <span
-                    className={`rounded border px-1.5 py-0.5 font-mono text-[10px] ${POSITION_COLOR[p.position]}`}
-                  >
-                    {p.position}
-                  </span>
-                  {p.club_name && (
-                    <span className="flex items-center gap-1 truncate text-xs text-muted">
-                      <ClubBadge name={p.club_name} size="sm" />
-                      {p.club_name}
+        <>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {items.map((p) => (
+              <Link
+                key={p.id}
+                href={`/players/${p.id}`}
+                className="group flex items-center gap-3 rounded-xl bg-surface p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-raised hover:shadow-lg hover:shadow-black/20"
+              >
+                <PlayerAvatar name={p.name} position={p.position} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-display text-sm font-medium text-foreground transition-colors group-hover:text-accent">
+                    {p.name}
+                  </p>
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <span
+                      className={`rounded border px-1.5 py-0.5 font-mono text-[10px] ${POSITION_COLOR[p.position]}`}
+                    >
+                      {p.position}
                     </span>
-                  )}
+                    {p.club_name && (
+                      <span className="flex items-center gap-1 truncate text-xs text-muted">
+                        <ClubBadge name={p.club_name} size="sm" />
+                        {p.club_name}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </Link>
-          ))}
-        </div>
+              </Link>
+            ))}
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <PageLink
+                searchParams={baseParams}
+                position={position}
+                page={page - 1}
+                disabled={page <= 1}
+              >
+                Previous
+              </PageLink>
+              <span className="px-2 font-mono text-sm text-muted">
+                Page {page} of {totalPages}
+              </span>
+              <PageLink
+                searchParams={baseParams}
+                position={position}
+                page={page + 1}
+                disabled={page >= totalPages}
+              >
+                Next
+              </PageLink>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -139,6 +170,39 @@ function FilterLink({
       className={`rounded-lg border px-3 py-1 transition-colors duration-150 ${
         active ? "border-accent text-accent" : "border-border text-muted hover:text-foreground"
       }`}
+    >
+      {children}
+    </Link>
+  );
+}
+
+function PageLink({
+  searchParams,
+  position,
+  page,
+  disabled,
+  children,
+}: {
+  searchParams: URLSearchParams;
+  position: string | undefined;
+  page: number;
+  disabled: boolean;
+  children: React.ReactNode;
+}) {
+  if (disabled) {
+    return (
+      <span className="cursor-not-allowed rounded-lg border border-border px-3 py-1.5 text-sm text-muted/40">
+        {children}
+      </span>
+    );
+  }
+  const params = new URLSearchParams(searchParams);
+  if (position) params.set("position", position);
+  params.set("page", String(page));
+  return (
+    <Link
+      href={`/players?${params}`}
+      className="rounded-lg border border-border px-3 py-1.5 text-sm text-muted transition-colors duration-150 hover:border-accent/40 hover:text-foreground"
     >
       {children}
     </Link>
