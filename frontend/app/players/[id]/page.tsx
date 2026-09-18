@@ -77,6 +77,14 @@ export default async function PlayerProfilePage({ params }: { params: { id: stri
               </p>
             )}
           </div>
+        ) : player.last_season_label ? (
+          <p className="mt-3 max-w-md text-sm text-muted">
+            No current valuation. {player.name} was last part of the Premier
+            League in the <span className="text-foreground">{player.last_season_label}</span>{" "}
+            season and is not in this season&rsquo;s squad data, so no live
+            prediction is generated for them. Their historical stats are
+            still used for training the model.
+          </p>
         ) : (
           <p className="mt-3 max-w-md text-sm text-muted">
             No model valuation yet. This player has not been scored by a

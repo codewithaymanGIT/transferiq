@@ -16,6 +16,7 @@ export interface Player {
   position: "GK" | "DF" | "MF" | "FW";
   current_club_id: number | null;
   club_name: string | null;
+  last_season_label: string | null;
 }
 
 export interface PlayerListResponse {

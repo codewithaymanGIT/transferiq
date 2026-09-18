@@ -28,6 +28,7 @@ class PlayerOut(BaseModel):
     position: PositionLiteral
     current_club_id: int | None
     club_name: str | None = None
+    last_season_label: str | None = None
 
 
 class PlayerListResponse(BaseModel):

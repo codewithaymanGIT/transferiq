@@ -40,11 +40,31 @@ def list_players(
     position: schemas.PositionLiteral | None = Query(default=None),
     club_id: int | None = Query(default=None),
     q: str | None = Query(default=None, description="Case-insensitive substring match on player name."),
+    include_inactive: bool = Query(
+        default=False,
+        description=(
+            "By default only players with stats in the most recently loaded season are "
+            "returned -- a player whose last real appearance was years ago (retired, left "
+            "the league) still exists in the DB for training-data integrity, but showing "
+            "their years-stale club affiliation as if current is misleading. Set true to "
+            "include them."
+        ),
+    ),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=100),
 ) -> schemas.PlayerListResponse:
     stmt = select(models.Player).options(joinedload(models.Player.club))
     count_stmt = select(func.count()).select_from(models.Player)
+
+    if not include_inactive:
+        latest_season = db.query(models.Season).order_by(models.Season.label.desc()).first()
+        if latest_season is not None:
+            current_stats_subq = (
+                select(models.PlayerSeasonStats.player_id)
+                .where(models.PlayerSeasonStats.season_id == latest_season.id)
+            )
+            stmt = stmt.where(models.Player.id.in_(current_stats_subq))
+            count_stmt = count_stmt.where(models.Player.id.in_(current_stats_subq))
 
     if position is not None:
         stmt = stmt.where(models.Player.position == position)
@@ -74,7 +94,19 @@ def get_player(player_id: int, db: Session = Depends(get_db)) -> schemas.PlayerO
     player = db.get(models.Player, player_id)
     if player is None:
         raise HTTPException(status_code=404, detail=f"Player {player_id} not found")
-    return schemas.PlayerOut.model_validate(player)
+    out = schemas.PlayerOut.model_validate(player)
+    # Real, honest signal for the frontend to explain a missing valuation
+    # -- rather than a generic message, it can say exactly which season
+    # this player was last actually part of.
+    last_season_row = (
+        db.query(models.Season.label)
+        .join(models.PlayerSeasonStats, models.PlayerSeasonStats.season_id == models.Season.id)
+        .filter(models.PlayerSeasonStats.player_id == player_id)
+        .order_by(models.Season.label.desc())
+        .first()
+    )
+    out.last_season_label = last_season_row[0] if last_season_row else None
+    return out
 
 
 @app.get(
