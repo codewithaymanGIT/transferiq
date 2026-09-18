@@ -183,3 +183,52 @@ backfill), the training matrix's leakage guard, the model comparison script
 (cross-validation, feature importances, SHAP, negative-result detection), and
 the live-prediction script's core logic (age computation, honest skip-when-
 missing-DOB behavior).
+
+
+## Architecture
+
+```mermaid
+flowchart TD
+    subgraph Sources["Real external data"]
+        FBref["FBref\n(season stats, defensive stats)"]
+        TM["Transfermarkt export\n(disclosed transfer fees)"]
+    end
+
+    subgraph Ingest["scripts/ingest"]
+        Providers["fbref_provider.py\ntransfermarkt_provider.py"]
+    end
+
+    subgraph Transform["scripts/transform"]
+        Clean["clean_validate_transform.py\n(dedupe, validate ranges,\nper-90 shrinkage, anti-leakage)"]
+    end
+
+    subgraph Load["scripts/load"]
+        LoadCore["load_core.py\n(idempotent upsert)"]
+    end
+
+    DB[(Postgres\nplayers / clubs / seasons /\nplayer_season_stats / transfers /\npredictions / model_versions)]
+
+    subgraph Train["scripts/train"]
+        Matrix["build_training_matrix.py\n(match transfer -> prior-season stats)"]
+        Baseline["train_baseline_models.py\n(5-fold CV comparison, SHAP)"]
+        Temporal["temporal_validation.py\n(walk-forward, out-of-time)"]
+        Predict["generate_predictions.py\n(fit final model, calibrated\nintervals, write live predictions)"]
+    end
+
+    API["FastAPI backend\n(/api/v1/players, /valuation,\n/predictions/top)"]
+    Frontend["Next.js frontend\n(Dashboard, Players, Rankings,\nCompare, player detail)"]
+
+    FBref --> Providers
+    TM --> Providers
+    Providers --> Clean --> LoadCore --> DB
+    DB --> Matrix --> Baseline
+    Matrix --> Temporal
+    Matrix --> Predict
+    Predict --> DB
+    DB --> API --> Frontend
+```
+
+Data flows one direction: real sources in, through validation and matching,
+into Postgres, then to the model, then to the API and UI. Nothing in the
+pipeline fabricates a value it doesn't have -- see `docs/model-card.md`
+for the model's real, honestly-reported limitations.
