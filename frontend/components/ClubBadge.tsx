@@ -13,13 +13,13 @@ const TINTS = [
   "bg-foreground/10 text-foreground",
 ];
 
-function hashTint(name: string): string {
+export function hashTint(name: string): string {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
   return TINTS[h % TINTS.length];
 }
 
-function clubInitials(name: string): string {
+export function clubInitials(name: string): string {
   const stripped = name.replace(/\b(FC|AFC|CF|United|City)\b/gi, "").trim();
   const parts = (stripped || name).split(/\s+/).filter(Boolean);
   if (parts.length === 1) return parts[0].slice(0, 3).toUpperCase();
