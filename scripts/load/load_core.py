@@ -105,6 +105,7 @@ def _upsert_player(
     name: str,
     position: str,
     club_id: int,
+    season_label: str,
     birth_year=None,
     nationality: str | None = None,
 ) -> tuple[models.Player, bool]:
@@ -124,9 +125,27 @@ def _upsert_player(
         db.add(player)
         db.flush()
     else:
-        # Players move clubs season to season -- keep this current with the latest pull.
-        player.current_club_id = club_id
-        player.position = models.PositionGroup(position)
+        # Players move clubs season to season -- keep this current with the
+        # latest pull. But "latest pull" must mean the chronologically
+        # latest SEASON, not just whichever load happened to run most
+        # recently -- backfilling an OLDER season (e.g. growing the
+        # training corpus with 2013-14 data) after a player's current
+        # season was already loaded must never revert their club
+        # backward in time. This is a real bug that shipped once
+        # already (Andy Robertson reverted to "Hull City" -- his real
+        # 2014-17 club -- after backfilling old seasons post-dated his
+        # already-loaded 2025-26 Liverpool stats) and is now guarded
+        # against explicitly rather than assumed away.
+        existing_latest_season = (
+            db.query(models.Season.label)
+            .join(models.PlayerSeasonStats, models.PlayerSeasonStats.season_id == models.Season.id)
+            .filter(models.PlayerSeasonStats.player_id == player.id)
+            .order_by(models.Season.label.desc())
+            .first()
+        )
+        if existing_latest_season is None or season_label >= existing_latest_season[0]:
+            player.current_club_id = club_id
+            player.position = models.PositionGroup(position)
         # Birth year/nationality are static real-world facts -- only fill if
         # we don't already have them; never overwrite a previously-set real
         # value with a possibly-missing one from an older/different pull.
@@ -287,6 +306,7 @@ def load_dataframe(
             row["player_name"],
             position,
             club.id,
+            season_label=season,
             birth_year=row.get("birth_year"),
             nationality=row.get("nationality"),
         )
