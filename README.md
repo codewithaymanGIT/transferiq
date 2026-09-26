@@ -48,6 +48,8 @@ On walk-forward data, with the quantiles recomputed from each fold's training se
 
 ![Walk-forward predicted vs. actual fees with 5th to 95th percentile intervals](docs/charts/predicted_vs_actual.png)
 
+The chart also shows where the model fails. Held-out predictions only span €2.94m to €42.9m, while actual fees run from €0.11m to €117.5m. Every one of the 20 transfers under €5m was overpredicted. None of the 23 transfers at €40m or more was; for those, the median prediction was €18.42m against a median actual of €55.0m. The model pulls every estimate toward the middle of the market. That is why R² is near zero even though coverage is on target.
+
 ![Mean absolute SHAP value per feature](docs/charts/shap_importance.png)
 
 Age at transfer has the largest average SHAP impact, followed by minutes played. These values describe what this model leans on. They are not causal effects.
@@ -171,7 +173,7 @@ Raw and processed data are gitignored. Nothing from these sources is committed.
 
 ## Limitations
 
-- **Out-of-time R² is 0.020.** The model does not meaningfully predict future fees.
+- **Out-of-time R² is 0.020.** The model does not meaningfully predict future fees. It systematically overprices cheap transfers and underprices expensive ones (see the predicted-vs-actual chart).
 - **185 training rows.** Walk-forward test seasons hold 13 to 35 transfers each. Goalkeepers make up 13 training rows and are effectively unvalidated.
 - **Features are narrow.** They cover minutes, goals, assists, per-90 rates, age, tackles won, interceptions, top-six club and position. The model has no data on contract length, wages, injuries or selling-club context, so it cannot tell market value apart from the fee a club would actually accept.
 - **No market-value benchmark.** The `market_values` table exists but is empty, because no free, reliable source is integrated.
