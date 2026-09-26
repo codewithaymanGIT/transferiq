@@ -44,6 +44,10 @@ Sources: [`docs/model-comparison.md`](docs/model-comparison.md) and [`docs/tempo
 
 **Prediction intervals.** Each live valuation carries a low/high bound. The bounds come from the 5th and 95th percentiles of out-of-fold CV residuals in log-fee space, so they reflect how wrong the model actually was on held-out data rather than the spread of its own trees. Confidence is stored as "Low" for every prediction.
 
+On walk-forward data, with the quantiles recomputed from each fold's training seasons only, 137 of 152 actual fees (90.1%) landed inside their interval, against a 90% target. The intervals reach that coverage by being wide. The residual quantiles are -1.282 and +1.099 in log-fee space, so the upper bound is roughly 10 times the lower. The model is honest about its uncertainty, not precise.
+
+![Walk-forward predicted vs. actual fees with 5th to 95th percentile intervals](docs/charts/predicted_vs_actual.png)
+
 ![Mean absolute SHAP value per feature](docs/charts/shap_importance.png)
 
 Age at transfer has the largest average SHAP impact, followed by minutes played. These values describe what this model leans on. They are not causal effects.
@@ -171,13 +175,11 @@ Raw and processed data are gitignored. Nothing from these sources is committed.
 - **185 training rows.** Walk-forward test seasons hold 13 to 35 transfers each. Goalkeepers make up 13 training rows and are effectively unvalidated.
 - **Features are narrow.** They cover minutes, goals, assists, per-90 rates, age, tackles won, interceptions, top-six club and position. The model has no data on contract length, wages, injuries or selling-club context, so it cannot tell market value apart from the fee a club would actually accept.
 - **No market-value benchmark.** The `market_values` table exists but is empty, because no free, reliable source is integrated.
-- **Intervals use one global width**, not a width per player or per position.
-- **Currency label bug.** The frontend currently shows figures with a £ sign, but the pipeline and model work in EUR.
+- **Intervals use one global width**, not a width per player or per position. Coverage is on target overall but has not been checked by fee size or position.
 
 ## What I'd do next
 
 1. Run the median baseline through the same walk-forward folds. Out-of-time results currently exist only for Random Forest.
-2. Save held-out predictions from `temporal_validation.py` so a predicted-vs-actual chart with intervals can be generated.
-3. Match more historical seasons. More data is the most likely way to improve the out-of-time result; more tuning is not.
-4. Add contract-length data if a source with clear terms can be found. It is the largest missing driver of fees.
-5. Build an interval coverage check: how often actual fees fall inside the 5th to 95th percentile band on out-of-time data.
+2. Match more historical seasons. More data is the most likely way to improve the out-of-time result; more tuning is not.
+3. Add contract-length data if a source with clear terms can be found. It is the largest missing driver of fees.
+4. Check interval coverage separately for cheap and expensive transfers, where a single global width is most likely to be wrong.

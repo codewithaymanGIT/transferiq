@@ -7,11 +7,9 @@ refits a model or types a number by hand:
   docs/model-comparison.md     <- scripts/train/train_baseline_models.py
   docs/temporal-validation.md  <- scripts/train/temporal_validation.py
 
-Optional input (not produced by any script yet, so the chart is skipped
-when it is missing rather than faked):
-
-  data/processed/heldout_predictions.csv
-      columns: actual, predicted, low_bound, high_bound  (EUR millions)
+  docs/heldout_predictions.csv <- scripts/train/temporal_validation.py
+      columns: test_season, actual, predicted, low_bound, high_bound (EUR m)
+      (the predicted-vs-actual chart is skipped if this file is missing)
 
 Usage:
     python scripts/docs/make_charts.py
@@ -175,11 +173,19 @@ def chart_heldout(csv_path: Path) -> Path:
     ax.vlines(df["actual"], df["low_bound"], df["high_bound"], color=BASELINE_COLOR, alpha=0.5, linewidth=1,
               label="Prediction interval")
     ax.scatter(df["actual"], df["predicted"], s=12, color=MODEL_COLOR, label="Predicted")
-    lim = max(df["actual"].max(), df["predicted"].max())
-    ax.plot([0, lim], [0, lim], color="black", linewidth=0.8, linestyle="--", label="Perfect prediction")
-    ax.set_xlabel("Actual fee, EUR millions")
-    ax.set_ylabel("Predicted fee, EUR millions")
-    ax.set_title(f"Held-out predictions vs. actual fees (n={len(df)})", fontsize=10)
+    lo = max(min(df["actual"].min(), df["low_bound"].min()), 0.1)
+    hi = max(df["actual"].max(), df["high_bound"].max())
+    ax.plot([lo, hi], [lo, hi], color="black", linewidth=0.8, linestyle="--", label="Perfect prediction")
+    # Fees are heavily right-skewed; log axes keep the many small fees readable.
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_xlabel("Actual fee, EUR millions (log scale)")
+    ax.set_ylabel("Predicted fee, EUR millions (log scale)")
+    inside = ((df["actual"] >= df["low_bound"]) & (df["actual"] <= df["high_bound"])).mean()
+    ax.set_title(
+        f"Walk-forward held-out predictions (n={len(df)}), actual inside 5-95% interval: {inside:.0%}",
+        fontsize=10,
+    )
     ax.legend(frameon=False, fontsize=9)
     fig.tight_layout()
     path = OUT / "predicted_vs_actual.png"
@@ -205,12 +211,12 @@ def main() -> int:
         chart_shap(shap_rows),
     ]
 
-    heldout = REPO_ROOT / "data" / "processed" / "heldout_predictions.csv"
+    heldout = DOCS / "heldout_predictions.csv"
     if heldout.exists():
         written.append(chart_heldout(heldout))
     else:
         print(f"Skipped predicted-vs-actual chart: {heldout.relative_to(REPO_ROOT)} not found "
-              "(no script saves held-out predictions yet).")
+              "(run scripts/train/temporal_validation.py).")
 
     for p in written:
         print(f"Wrote {p.relative_to(REPO_ROOT)}")

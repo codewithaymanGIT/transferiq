@@ -20,18 +20,12 @@ out-of-sample error, so it understates real uncertainty; residual-based
 calibration reflects how wrong the model actually was on held-out data
 during cross-validation.
 
-Two separate models are fit by position group -- "defensive" (DF, GK)
-and "attacking" (MF, FW) -- rather than one blended model, since
-defensive contribution (tackles, interceptions) and attacking
-contribution (goals, assists) matter very differently by role. A literal
-4-way split by exact position was considered and rejected: with 185
-training rows, GK alone has only 13, far too few for any meaningful CV.
-The 2-way split keeps each group (81 / 104 rows) large enough to mean
-something, while still separating the two genuinely different value
-drivers. Both groups are logged under a single ModelVersion record
-(metrics for both, honestly reported) rather than two separate
-"is_active" rows, since the rest of the API (Rankings, valuation
-endpoint) assumes exactly one active model version.
+A single blended model is fit across all positions. A 2-way split into
+"defensive" (DF, GK) and "attacking" (MF, FW) models was tried and
+measured: CV R2 of 0.112 and -0.002, both below the blended model's
+0.140, because 185 rows split 81 / 104 leaves too little data per model.
+It was reverted (see POSITION_GROUPS below). The POSITION_GROUPS
+mechanism is kept so a split can be re-tested once more data exists.
 
 Features include age_at_transfer, tackles, interceptions (added after
 discovering FBref's defensive-actions page was being silently discarded
@@ -65,7 +59,7 @@ from per90 import add_per90_columns  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-MODEL_NAME = "random_forest_v2_positiongrouped"
+MODEL_NAME = "random_forest_v3_blended"
 _FEATURE_COLS = [
     "minutes", "goals", "assists", "goals_per90", "assists_per90", "age_at_transfer",
     "tackles", "interceptions", "is_top_six",
@@ -142,7 +136,7 @@ def _fit_final_model(training_df: pd.DataFrame) -> Pipeline:
     """Fit the same Random Forest pipeline used throughout
     train_baseline_models.py on the given training rows -- this is the
     model actually being used, not an evaluation run, so no train/test
-    split here. Called once per position group in main()."""
+    split here. Called once per entry in POSITION_GROUPS (currently one)."""
     feature_df = training_df[_FEATURE_COLS + ["position"]].copy()
     for col in _FEATURE_COLS:
         feature_df[col] = feature_df[col].fillna(feature_df[col].median())
@@ -160,9 +154,9 @@ def _compute_residual_quantiles(
     """Out-of-fold CV residuals (in log-fee space), used to calibrate
     prediction intervals against real held-out error rather than the
     model's own internal tree spread. Returns (low_quantile,
-    high_quantile) of (actual_log - predicted_log). A single width
-    per position group, since even 81-104 rows isn't enough to split
-    further."""
+    high_quantile) of (actual_log - predicted_log). A single global
+    width, since 185 rows isn't enough to support per-position or
+    per-player intervals."""
     feature_df = training_df[_FEATURE_COLS + ["position"]].copy()
     for col in _FEATURE_COLS:
         feature_df[col] = feature_df[col].fillna(feature_df[col].median())
@@ -308,7 +302,7 @@ def main() -> None:
             "architecture": "single blended model (a position split was tried and reverted -- see generate_predictions.py module docstring)",
             "group_metrics": group_metrics,
             "n_training_rows_total": int(len(training_df)),
-            "interval_method": "out-of-fold CV residual quantiles (5th/95th percentile, log-fee space), per group",
+            "interval_method": "out-of-fold CV residual quantiles (5th/95th percentile, log-fee space)",
             "note": (
                 "Fragile positive signal, not a mature model -- see "
                 "docs/model-comparison.md for the blended-model comparison and caveats. "
@@ -332,7 +326,7 @@ def main() -> None:
             hyperparams_json={
                 "n_estimators": 200,
                 "random_state": 42,
-                "model_type": "RandomForestRegressor (x2, position-grouped)",
+                "model_type": "RandomForestRegressor (single blended model)",
             },
             is_active=True,
         )

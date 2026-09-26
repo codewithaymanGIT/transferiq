@@ -27,6 +27,10 @@ the more reliable headline number.
 
 - **R2: 0.020** across all 152 held-out predictions combined
 - **MAE: 12.67m EUR**
+- **Interval coverage: 137/152 = 90.1%** of actual fees fell inside
+  their 5th-95th percentile interval (a well-calibrated interval would hold about 90%).
+  Quantiles are computed from each fold's training seasons only.
+  Held-out rows are saved to `heldout_predictions.csv`.
 
 For comparison, the random 5-fold CV reported in `model-comparison.md`
 gives R2=0.140 on the same 185-row dataset. The gap between the two

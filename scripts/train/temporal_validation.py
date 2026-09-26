@@ -19,6 +19,14 @@ season alone, and pool every held-out prediction across all folds into
 one combined set for the headline metric (per-season R2 on 13-35 rows
 is too noisy to trust individually -- see the per-season breakdown for
 that caveat made explicit rather than hidden).
+
+Each held-out prediction also gets the same 5th/95th percentile interval
+the live model uses, with the residual quantiles computed from the
+training seasons only. Every held-out row is saved to
+docs/heldout_predictions.csv (no player names, just season, actual,
+predicted and bounds) so the README's predicted-vs-actual chart is
+reproducible, and the report states how often the actual fee landed
+inside its interval.
 """
 from __future__ import annotations
 
@@ -32,7 +40,7 @@ from sklearn.metrics import mean_absolute_error, r2_score
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from generate_predictions import _FEATURE_COLS, _build_pipeline  # noqa: E402
+from generate_predictions import _FEATURE_COLS, _build_pipeline, _compute_residual_quantiles  # noqa: E402
 
 
 def _season_sort_key(label: str) -> int:
@@ -49,6 +57,7 @@ def main() -> None:
 
     all_actual: list[float] = []
     all_pred: list[float] = []
+    heldout_rows: list[dict] = []
     per_season_rows: list[dict] = []
 
     for i in range(2, len(seasons)):
@@ -81,6 +90,17 @@ def main() -> None:
         pred = np.expm1(pred_log)
         actual = np.expm1(test_df["log_fee"].to_numpy())
 
+        # Interval width from the training seasons only -- the test season
+        # never influences its own interval.
+        low_q, high_q = _compute_residual_quantiles(train_df)
+        low = np.minimum(np.expm1(pred_log + low_q), pred)
+        high = np.maximum(np.expm1(pred_log + high_q), pred)
+        for a, p_, lo, hi in zip(actual, pred, low, high):
+            heldout_rows.append(
+                {"test_season": test_season, "actual": round(float(a), 3), "predicted": round(float(p_), 3),
+                 "low_bound": round(float(lo), 3), "high_bound": round(float(hi), 3)}
+            )
+
         fold_r2 = r2_score(actual, pred) if len(actual) > 1 else float("nan")
         fold_mae = mean_absolute_error(actual, pred)
         print(f"{test_season:<14} {len(train_df):>10} {len(test_df):>10} {fold_r2:>8.3f} {fold_mae:>8.2f}")
@@ -96,6 +116,15 @@ def main() -> None:
     pooled_mae = mean_absolute_error(all_actual, all_pred)
     print(f"\nPooled out-of-time R2 (all {len(all_actual)} held-out predictions combined): {pooled_r2:.3f}")
     print(f"Pooled out-of-time MAE: {pooled_mae:.2f}")
+
+    heldout_df = pd.DataFrame(heldout_rows)
+    inside = (heldout_df["actual"] >= heldout_df["low_bound"]) & (heldout_df["actual"] <= heldout_df["high_bound"])
+    n_inside = int(inside.sum())
+    coverage = n_inside / len(heldout_df)
+    print(f"Interval coverage (target 90%): {n_inside}/{len(heldout_df)} = {coverage:.1%}")
+    heldout_path = REPO_ROOT / "docs" / "heldout_predictions.csv"
+    heldout_df.to_csv(heldout_path, index=False)
+    print(f"Wrote {heldout_path}")
 
     report_lines = [
         "# Temporal (Walk-Forward) Validation",
@@ -126,6 +155,10 @@ def main() -> None:
         "",
         f"- **R2: {pooled_r2:.3f}** across all {len(all_actual)} held-out predictions combined",
         f"- **MAE: {pooled_mae:.2f}m EUR**",
+        f"- **Interval coverage: {n_inside}/{len(heldout_df)} = {coverage:.1%}** of actual fees fell inside",
+        "  their 5th-95th percentile interval (a well-calibrated interval would hold about 90%).",
+        "  Quantiles are computed from each fold's training seasons only.",
+        "  Held-out rows are saved to `heldout_predictions.csv`.",
         "",
         "For comparison, the random 5-fold CV reported in `model-comparison.md`",
         f"gives R2=0.140 on the same 185-row dataset. The gap between the two",
