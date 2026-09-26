@@ -67,7 +67,7 @@ export default async function DashboardPage() {
           <Stat label="Real predictions issued" value={totalPredictions.toLocaleString()} icon="valuations" />
           <Stat
             label="Top current valuation"
-            value={topPlayers[0] ? `£${Number(topPlayers[0].predicted_value).toLocaleString()}m` : "—"}
+            value={topPlayers[0] ? `€${Number(topPlayers[0].predicted_value).toLocaleString()}m` : "—"}
             icon="model"
           />
         </section>
@@ -98,7 +98,7 @@ export default async function DashboardPage() {
                     <span className="truncate">{p.club_name ?? p.position}</span>
                   </div>
                   <p className="mt-1 font-mono text-sm text-accent">
-                    &pound;{Number(p.predicted_value).toLocaleString()}m
+                    &euro;{Number(p.predicted_value).toLocaleString()}m
                   </p>
                 </div>
               </Link>

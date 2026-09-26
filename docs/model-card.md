@@ -6,7 +6,7 @@
 - **Target**: log(transfer fee in EUR millions); predictions are transformed back with `expm1`
 - **Features**: minutes, goals, assists, goals/assists per 90, age at transfer, tackles, interceptions, is_top_six (real, objective club fact), position (one-hot)
 - **Training data size**: 185 real, disclosed permanent transfers with matched prior-season stats, spanning the 2014-15 through 2022-23 transfer windows
-- **Current version**: `random_forest_v2_positiongrouped_*` (name is historical -- see Limitations; the deployed model is a single blended model, not position-split)
+- **Current version**: `random_forest_v3_blended_<timestamp>`, a single model across all positions (a position-split v2 was tried and reverted -- see Limitations)
 
 ## Intended use
 

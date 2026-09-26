@@ -46,7 +46,7 @@ export default async function PlayerProfilePage({ params }: { params: { id: stri
           <div className="mt-4 space-y-3">
             <div className="flex items-baseline gap-3">
               <p className="font-mono text-4xl text-accent">
-                &pound;{Number(valuation.predicted_value).toLocaleString()}m
+                &euro;{Number(valuation.predicted_value).toLocaleString()}m
               </p>
               <span
                 className={`rounded-full border px-2.5 py-0.5 text-xs ${
@@ -61,12 +61,12 @@ export default async function PlayerProfilePage({ params }: { params: { id: stri
               </span>
             </div>
             <p className="text-sm text-muted">
-              Range &pound;{Number(valuation.low_bound).toLocaleString()}m to &pound;
+              Range &euro;{Number(valuation.low_bound).toLocaleString()}m to &euro;
               {Number(valuation.high_bound).toLocaleString()}m, model {valuation.model_version}
             </p>
             {valuation.benchmark_value && (
               <p className="text-sm text-muted">
-                Benchmark &pound;{Number(valuation.benchmark_value).toLocaleString()}
+                Benchmark &euro;{Number(valuation.benchmark_value).toLocaleString()}
                 {valuation.benchmark_difference_pct != null && (
                   <>
                     {" "}

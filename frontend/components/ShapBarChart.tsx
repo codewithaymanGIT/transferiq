@@ -46,7 +46,7 @@ export function ShapBarChart({ contributions }: { contributions: Contribution[] 
                 isPositive ? "text-positive" : "text-negative"
               }`}
             >
-              {isPositive ? "+" : ""}£{value.toFixed(1)}m
+              {isPositive ? "+" : "\u2212"}€{Math.abs(value).toFixed(1)}m
             </span>
           </div>
         );

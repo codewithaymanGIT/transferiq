@@ -117,7 +117,7 @@ function PlayerColumn({ player, valuation }: { player: Player; valuation: Valuat
           <>
             <div className="mt-2 flex items-baseline gap-2">
               <p className="font-mono text-2xl text-accent">
-                &pound;{Number(valuation.predicted_value).toLocaleString()}m
+                &euro;{Number(valuation.predicted_value).toLocaleString()}m
               </p>
               <span
                 className={`rounded-full border px-2 py-0.5 text-xs ${
@@ -132,7 +132,7 @@ function PlayerColumn({ player, valuation }: { player: Player; valuation: Valuat
               </span>
             </div>
             <p className="mt-1 text-xs text-muted">
-              Range &pound;{Number(valuation.low_bound).toLocaleString()}m &ndash; &pound;
+              Range &euro;{Number(valuation.low_bound).toLocaleString()}m &ndash; &euro;
               {Number(valuation.high_bound).toLocaleString()}m
             </p>
           </>

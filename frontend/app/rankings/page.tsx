@@ -88,7 +88,7 @@ export default async function RankingsPage({
                 </span>
               )}
               <p className="shrink-0 font-mono text-sm text-accent">
-                &pound;{Number(p.predicted_value).toLocaleString()}m
+                &euro;{Number(p.predicted_value).toLocaleString()}m
               </p>
             </Link>
           ))}
