@@ -4,6 +4,8 @@ Estimates Premier League transfer fees from prior-season performance data with a
 
 [![Tests](https://github.com/codewithaymanGIT/transferiq/actions/workflows/tests.yml/badge.svg)](https://github.com/codewithaymanGIT/transferiq/actions/workflows/tests.yml)
 
+**Live demo:** [transferiq-wheat.vercel.app](https://transferiq-wheat.vercel.app), a read-only snapshot of the model's real predictions. The full stack runs locally with Docker (see [Run it locally](#run-it-locally)).
+
 ![Player profile with model valuation, interval and SHAP breakdown](docs/screenshots/player_valued.png)
 
 The framing is valuation under uncertainty, validated properly. The model finds a small signal. Most of the work went into measuring how small it is.
