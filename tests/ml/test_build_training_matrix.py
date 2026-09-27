@@ -156,3 +156,36 @@ def test_log_fee_computed_correctly(db_session: Session):
     row = result.df.iloc[0]
     assert row["fee_eur_millions"] == pytest.approx(80.0)
     assert row["log_fee"] == pytest.approx(math.log1p(80.0))
+
+
+def test_combines_prior_season_stints_at_two_clubs(db_session: Session):
+    player = models.Player(name="Two Club Player", position=models.PositionGroup.MF)
+    club_a, club_b = models.Club(name="Club A"), models.Club(name="Chelsea")
+    db_session.add_all([player, club_a, club_b])
+    db_session.flush()
+    s_2021 = _season(db_session, "2021-2022", 2021)
+    s_2022 = _season(db_session, "2022-2023", 2022)
+    db_session.add_all(
+        [
+            models.PlayerSeasonStats(player_id=player.id, season_id=s_2021.id, club_id=club_a.id, minutes=500, goals=1, assists=0),
+            models.PlayerSeasonStats(player_id=player.id, season_id=s_2021.id, club_id=club_b.id, minutes=1500, goals=4, assists=3),
+        ]
+    )
+    db_session.add(
+        models.Transfer(
+            player_id=player.id,
+            transfer_date=datetime.date(2022, 8, 1),
+            fee_amount=30.0,
+            fee_currency=models.FeeCurrency.EUR,
+            fee_disclosed=True,
+            transfer_type=models.TransferType.PERMANENT,
+            season_id=s_2022.id,
+        )
+    )
+    db_session.commit()
+
+    result = assemble_training_matrix(db_session)
+    assert result.matched == 1 and result.multi_stint_rows == 1
+    row = result.df.iloc[0]
+    assert row["minutes"] == 2000 and row["goals"] == 5 and row["assists"] == 3
+    assert row["is_top_six"] == 1  # most minutes at Chelsea

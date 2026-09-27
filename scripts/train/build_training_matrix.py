@@ -30,6 +30,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts" / "transform"))
 
 from app import models  # noqa: E402
 from per90 import add_per90_columns  # noqa: E402
+from season_stats import combine_stints  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,7 @@ class MatrixResult:
     df: pd.DataFrame
     transfers_considered: int = 0
     matched: int = 0
+    multi_stint_rows: int = 0
     skipped_no_prior_season_stats: list[str] = field(default_factory=list)
 
 
@@ -61,6 +63,7 @@ def assemble_training_matrix(db: Session) -> MatrixResult:
 
     rows: list[dict] = []
     skipped: list[str] = []
+    multi_stint_rows = 0
 
     for transfer in transfers:
         player = db.get(models.Player, transfer.player_id)
@@ -78,9 +81,9 @@ def assemble_training_matrix(db: Session) -> MatrixResult:
         stats = (
             db.query(models.PlayerSeasonStats)
             .filter_by(player_id=player.id, season_id=prior_season.id)
-            .first()
+            .all()
         )
-        if stats is None:
+        if not stats:
             skipped.append(f"{player.name}: no {prior_label} stats loaded (transfer in {season.label})")
             continue
 
@@ -93,6 +96,11 @@ def assemble_training_matrix(db: Session) -> MatrixResult:
             # valuations that goals/assists/minutes alone don't capture.
             age_at_transfer = (transfer.transfer_date - player.date_of_birth).days / 365.25
 
+        # A mid-season move leaves one stats row per club; use the whole season.
+        combined = combine_stints(stats)
+        if combined["n_stints"] > 1:
+            multi_stint_rows += 1
+
         rows.append(
             {
                 "player_name": player.name,
@@ -100,23 +108,23 @@ def assemble_training_matrix(db: Session) -> MatrixResult:
                 "transfer_season": season.label,
                 "stats_season": prior_label,
                 "age_at_transfer": age_at_transfer,
-                "minutes": stats.minutes,
-                "goals": stats.goals,
-                "assists": stats.assists,
-                "xg": float(stats.xg) if stats.xg is not None else None,
-                "xa": float(stats.xa) if stats.xa is not None else None,
+                "minutes": combined["minutes"],
+                "goals": combined["goals"],
+                "assists": combined["assists"],
+                "xg": combined["xg"],
+                "xa": combined["xa"],
                 # Real defensive stats from FBref's defense page -- see
                 # fbref_provider.py. Previously the model only had
                 # attacking stats to work with, forcing it to (wrongly)
                 # judge defenders on goals/assists.
-                "tackles": stats.tackles,
-                "interceptions": stats.interceptions,
+                "tackles": combined["tackles"],
+                "interceptions": combined["interceptions"],
                 # Real, objective fact -- the traditional PL "big six" --
                 # not a fabricated reputation/demand score. See
                 # generate_predictions.py for the exact club-name set.
                 "is_top_six": int(
-                    stats.club_id is not None
-                    and (club := db.get(models.Club, stats.club_id)) is not None
+                    combined["club_id"] is not None
+                    and (club := db.get(models.Club, combined["club_id"])) is not None
                     and club.name in {"Arsenal", "Chelsea", "Liverpool", "Manchester City", "Manchester Utd", "Tottenham"}
                 ),
                 "fee_eur_millions": float(transfer.fee_amount),
@@ -132,6 +140,7 @@ def assemble_training_matrix(db: Session) -> MatrixResult:
         df=df,
         transfers_considered=len(transfers),
         matched=len(rows),
+        multi_stint_rows=multi_stint_rows,
         skipped_no_prior_season_stats=skipped,
     )
 
@@ -153,6 +162,7 @@ def main() -> None:
         result.matched,
         len(result.skipped_no_prior_season_stats),
     )
+    logger.info("Rows combining more than one club stint in the stats season: %d", result.multi_stint_rows)
     if result.matched == 0:
         logger.info("No matched rows -- nothing to train on yet. See skip reasons below (first 15):")
         for reason in result.skipped_no_prior_season_stats[:15]:

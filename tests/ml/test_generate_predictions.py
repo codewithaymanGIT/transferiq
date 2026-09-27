@@ -188,3 +188,26 @@ def test_compute_shap_contributions_eur_uses_clean_names_not_sklearn_internals()
             assert "remainder__" not in name
             assert "position_ohe__" not in name
             assert "age_at_transfer" not in name  # renamed to "age"
+
+
+def test_build_live_features_combines_mid_season_stints_into_one_row(db_session):
+    season = models.Season(label="2025-2026", start_date=date(2025, 8, 1), end_date=date(2026, 5, 31))
+    club_a, club_b = models.Club(name="Club A"), models.Club(name="Arsenal")
+    db_session.add_all([season, club_a, club_b])
+    db_session.commit()
+    player = models.Player(name="Moved In January", position=models.PositionGroup.FW, date_of_birth=date(2000, 1, 1))
+    db_session.add(player)
+    db_session.commit()
+    db_session.add_all(
+        [
+            models.PlayerSeasonStats(player_id=player.id, season_id=season.id, club_id=club_a.id, minutes=700, goals=3, assists=1),
+            models.PlayerSeasonStats(player_id=player.id, season_id=season.id, club_id=club_b.id, minutes=1100, goals=4, assists=2),
+        ]
+    )
+    db_session.commit()
+
+    live_df, _ = _build_live_features(db_session, season, reference_date=date(2026, 1, 1))
+    assert len(live_df) == 1
+    row = live_df.iloc[0]
+    assert row["minutes"] == 1800 and row["goals"] == 7 and row["assists"] == 3
+    assert row["is_top_six"] == 1  # most minutes at Arsenal

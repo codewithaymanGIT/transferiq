@@ -56,6 +56,7 @@ sys.path.insert(0, str(REPO_ROOT / "scripts" / "transform"))
 from app import models  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
 from per90 import add_per90_columns  # noqa: E402
+from season_stats import combine_stints  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -221,8 +222,14 @@ def _build_live_features(
     rows: list[dict] = []
     skipped_no_dob = 0
     stats_rows = db.query(models.PlayerSeasonStats).filter_by(season_id=season.id).all()
-    for stats in stats_rows:
-        player = db.get(models.Player, stats.player_id)
+    # One record per player: a mid-season move leaves one stats row per club,
+    # and scoring each stint separately gave the same player two valuations.
+    by_player: dict[int, list] = {}
+    for row in stats_rows:
+        by_player.setdefault(row.player_id, []).append(row)
+    for player_id, stints in by_player.items():
+        stats = combine_stints(stints)
+        player = db.get(models.Player, player_id)
         if player is None or player.date_of_birth is None:
             skipped_no_dob += 1
             continue
@@ -231,13 +238,13 @@ def _build_live_features(
             {
                 "player_id": player.id,
                 "position": player.position.value,
-                "minutes": stats.minutes,
-                "goals": stats.goals,
-                "assists": stats.assists,
+                "minutes": stats["minutes"],
+                "goals": stats["goals"],
+                "assists": stats["assists"],
                 "age_at_transfer": age,  # same feature name the model was trained on
-                "tackles": stats.tackles,
-                "interceptions": stats.interceptions,
-                "is_top_six": _club_is_top_six(db, stats.club_id),
+                "tackles": stats["tackles"],
+                "interceptions": stats["interceptions"],
+                "is_top_six": _club_is_top_six(db, stats["club_id"]),
             }
         )
     df = pd.DataFrame(rows)
