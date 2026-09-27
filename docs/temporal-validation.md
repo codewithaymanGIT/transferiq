@@ -15,18 +15,18 @@ the more reliable headline number.
 
 | Test season | Train rows | Test rows | R2 | MAE (EUR m) |
 |---|---|---|---|---|
-| 2016-2017 | 33 | 24 | -0.174 | 9.04 |
-| 2017-2018 | 57 | 25 | -0.219 | 15.65 |
-| 2018-2019 | 82 | 13 | 0.095 | 13.51 |
-| 2019-2020 | 95 | 20 | 0.099 | 10.82 |
-| 2020-2021 | 115 | 16 | -0.062 | 11.61 |
-| 2021-2022 | 131 | 19 | 0.097 | 15.30 |
-| 2022-2023 | 150 | 35 | 0.047 | 12.83 |
+| 2016-2017 | 33 | 24 | -0.113 | 8.90 |
+| 2017-2018 | 57 | 25 | -0.222 | 15.50 |
+| 2018-2019 | 82 | 13 | 0.095 | 13.32 |
+| 2019-2020 | 95 | 20 | 0.114 | 10.81 |
+| 2020-2021 | 115 | 16 | -0.040 | 11.46 |
+| 2021-2022 | 131 | 19 | 0.127 | 15.03 |
+| 2022-2023 | 150 | 35 | 0.013 | 12.87 |
 
 ## Pooled out-of-time result
 
-- **R2: 0.020** across all 152 held-out predictions combined
-- **MAE: 12.67m EUR**
+- **R2: 0.025** across all 152 held-out predictions combined
+- **MAE: 12.57m EUR**
 
 Median-fee baseline under the same walk-forward folds (predicts the
 training seasons' median fee for every test transfer):
@@ -34,9 +34,9 @@ training seasons' median fee for every test transfer):
 | Model | Pooled R2 | Pooled MAE (EUR m) |
 |---|---|---|
 | Median baseline | -0.193 | 14.24 |
-| Random Forest | 0.020 | 12.67 |
+| Random Forest | 0.025 | 12.57 |
 
-- **Interval coverage: 137/152 = 90.1%** of actual fees fell inside
+- **Interval coverage: 133/152 = 87.5%** of actual fees fell inside
   their 5th-95th percentile interval (a well-calibrated interval would hold about 90%).
   Quantiles are computed from each fold's training seasons only.
   Held-out rows are saved to `heldout_predictions.csv`.
