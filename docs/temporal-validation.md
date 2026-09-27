@@ -27,6 +27,15 @@ the more reliable headline number.
 
 - **R2: 0.020** across all 152 held-out predictions combined
 - **MAE: 12.67m EUR**
+
+Median-fee baseline under the same walk-forward folds (predicts the
+training seasons' median fee for every test transfer):
+
+| Model | Pooled R2 | Pooled MAE (EUR m) |
+|---|---|---|
+| Median baseline | -0.193 | 14.24 |
+| Random Forest | 0.020 | 12.67 |
+
 - **Interval coverage: 137/152 = 90.1%** of actual fees fell inside
   their 5th-95th percentile interval (a well-calibrated interval would hold about 90%).
   Quantiles are computed from each fold's training seasons only.
