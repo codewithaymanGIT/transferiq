@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
+import { DEMO_MODE, DEMO_GENERATED_AT } from "@/lib/api";
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -64,6 +65,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </nav>
           </div>
         </header>
+        {DEMO_MODE && (
+          <div className="border-b border-border/80 bg-raised/60">
+            <p className="mx-auto max-w-6xl px-6 py-2 font-body text-xs text-muted">
+              Read-only demo: a snapshot of the model&apos;s real predictions
+              {DEMO_GENERATED_AT ? ` taken ${DEMO_GENERATED_AT}` : ""}. The full stack (PostgreSQL, FastAPI,
+              training pipeline) runs locally with Docker; see the{" "}
+              <a className="underline hover:text-foreground" href="https://github.com/codewithaymanGIT/transferiq">
+                GitHub repo
+              </a>
+              .
+            </p>
+          </div>
+        )}
         <main className="mx-auto max-w-6xl px-6 py-10">{children}</main>
       </body>
     </html>

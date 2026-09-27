@@ -57,6 +57,7 @@ def main() -> None:
 
     all_actual: list[float] = []
     all_pred: list[float] = []
+    all_baseline: list[float] = []
     heldout_rows: list[dict] = []
     per_season_rows: list[dict] = []
 
@@ -89,6 +90,10 @@ def main() -> None:
         pred_log = pipe.predict(X_test)
         pred = np.expm1(pred_log)
         actual = np.expm1(test_df["log_fee"].to_numpy())
+        # Naive baseline under the same walk-forward rule: the median fee of
+        # the training seasons only, predicted for every test transfer.
+        baseline = np.full(len(actual), float(np.median(np.expm1(train_df["log_fee"].to_numpy()))))
+        all_baseline.extend(baseline.tolist())
 
         # Interval width from the training seasons only -- the test season
         # never influences its own interval.
@@ -116,6 +121,9 @@ def main() -> None:
     pooled_mae = mean_absolute_error(all_actual, all_pred)
     print(f"\nPooled out-of-time R2 (all {len(all_actual)} held-out predictions combined): {pooled_r2:.3f}")
     print(f"Pooled out-of-time MAE: {pooled_mae:.2f}")
+    base_r2 = r2_score(all_actual, all_baseline)
+    base_mae = mean_absolute_error(all_actual, all_baseline)
+    print(f"Median baseline, same folds: R2={base_r2:.3f}, MAE={base_mae:.2f}")
 
     heldout_df = pd.DataFrame(heldout_rows)
     inside = (heldout_df["actual"] >= heldout_df["low_bound"]) & (heldout_df["actual"] <= heldout_df["high_bound"])
@@ -155,6 +163,15 @@ def main() -> None:
         "",
         f"- **R2: {pooled_r2:.3f}** across all {len(all_actual)} held-out predictions combined",
         f"- **MAE: {pooled_mae:.2f}m EUR**",
+        "",
+        "Median-fee baseline under the same walk-forward folds (predicts the",
+        "training seasons' median fee for every test transfer):",
+        "",
+        "| Model | Pooled R2 | Pooled MAE (EUR m) |",
+        "|---|---|---|",
+        f"| Median baseline | {base_r2:.3f} | {base_mae:.2f} |",
+        f"| Random Forest | {pooled_r2:.3f} | {pooled_mae:.2f} |",
+        "",
         f"- **Interval coverage: {n_inside}/{len(heldout_df)} = {coverage:.1%}** of actual fees fell inside",
         "  their 5th-95th percentile interval (a well-calibrated interval would hold about 90%).",
         "  Quantiles are computed from each fold's training seasons only.",
