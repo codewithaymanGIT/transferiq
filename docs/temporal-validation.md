@@ -41,9 +41,8 @@ training seasons' median fee for every test transfer):
   Quantiles are computed from each fold's training seasons only.
   Held-out rows are saved to `heldout_predictions.csv`.
 
-For comparison, the random 5-fold CV reported in `model-comparison.md`
-gives R2=0.140 on the same 185-row dataset. The gap between the two
-(if any) is itself informative: a materially worse out-of-time result
+Compare with the random 5-fold CV in `model-comparison.md`, run on the
+same rows. The gap between the two is itself informative: a materially worse out-of-time result
 would mean the model is leaning on patterns that don't hold up when
 tested the way it will actually be used, which random shuffling can
 hide.

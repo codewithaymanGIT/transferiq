@@ -416,8 +416,7 @@ def write_comparison_report(
             "Fit on the full dataset (not a held-out split) purely to see which "
             "features this particular model leans on most -- descriptive, not a "
             "validated or causal claim, and not the same as the metrics above. "
-            "SHAP explanations (planned) will give a more rigorous per-prediction "
-            "breakdown later.",
+            "The SHAP section below is the more rigorous per-prediction view.",
             "",
             "| Feature | Importance |",
             "|---|---|",

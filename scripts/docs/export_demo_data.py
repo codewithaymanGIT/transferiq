@@ -4,9 +4,9 @@ public demo (NEXT_PUBLIC_DEMO_MODE=1). Every record is copied from the live
 API response, never generated, so the demo shows exactly what the full
 stack serves.
 
-Includes: every current-season player (the API's default list), each
-player's valuation (or null where the API returns 404), and the full
-ranking from the active model version.
+Includes: every current-season player (the API's default list, with birth
+dates removed), each player's valuation (or null where the API returns
+404), and the full ranking from the active model version.
 
 Usage (backend running via docker compose):
     python scripts/docs/export_demo_data.py
@@ -55,6 +55,10 @@ def main() -> None:
         raise SystemExit(f"Backend not reachable at {api}. Start it with `docker compose up`.")
 
     players = fetch_all(api, "/api/v1/players")
+    # Data minimisation: the demo never displays birth dates, so they are not
+    # published. Names, clubs, positions and nationality are what the pages show.
+    for p in players:
+        p["date_of_birth"] = None
     top = fetch_all(api, "/api/v1/predictions/top")
     valuations = {}
     for p in players:

@@ -26,7 +26,7 @@ Averaged over multiple folds rather than one fixed 80/20 split -- at this sample
 
 ## Random Forest feature importances
 
-Fit on the full dataset (not a held-out split) purely to see which features this particular model leans on most -- descriptive, not a validated or causal claim, and not the same as the metrics above. SHAP explanations (planned) will give a more rigorous per-prediction breakdown later.
+Fit on the full dataset (not a held-out split) purely to see which features this particular model leans on most -- descriptive, not a validated or causal claim, and not the same as the metrics above. The SHAP section below is the more rigorous per-prediction view.
 
 | Feature | Importance |
 |---|---|
